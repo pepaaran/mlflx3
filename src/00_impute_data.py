@@ -14,6 +14,8 @@ data = data[data.index != 'CN-Cng']
 
 sites = data.index.unique()
 
+print("Imputing temperature (day and night) and GPP values")
+
 # Impute 'TA_F_DAY' and 'TA_F_NIGHT' columns using 'TA_F' and 'SW_IN_F'
 # Iterate over sites to perform imputation for each site
 df =  data[['TA_F','SW_IN_F','TA_F_DAY', 'TA_F_NIGHT']]
@@ -35,3 +37,4 @@ for s in sites:
 
 # Save the cleaned and imputed dataset to a new CSV file    
 data.to_csv('../data/processed/df_imputed.csv')
+print("Imputed data saved to data/processed/df_imputed.csv")
