@@ -1,4 +1,4 @@
-name: mlflx2_env
+name: mlflx3_env
 channels:
   - pytorch
   - nvidia
