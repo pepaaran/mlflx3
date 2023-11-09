@@ -1,13 +1,11 @@
 # This is the final LSTM model with leave-one-site-out cross-validation
 
-# Load necessary functions
-
 # Custom modules and functions
-from models.rnn_model import Model
+from models.lstm_model import Model, ModelCond
 from data.preprocess import compute_center
-from data.dataloader import gpp_dataset
+from data.dataloader import gpp_dataset, gpp_dataset_cat
 from utils.utils import set_seed
-from utils.train_test_loops import train_loop, test_loop
+from utils.train_test_loops import *
 
 # Load necessary dependencies
 import argparse
@@ -45,7 +43,7 @@ args = parser.parse_args()
 # Set random seeds for reproducibility
 set_seed(40)
 
-print("Starting leave-site-out on RNN model:")
+print("Starting leave-site-out on LSTM model:")
 print(f"> Device: {args.device}")
 print(f"> Epochs: {args.n_epochs}")
 print(f"> Condition on categorical variables: {args.conditional}")
@@ -60,17 +58,15 @@ raw = raw[raw.index != 'CN-Cng']
 # Create list of sites for leave-site-out cross validation
 sites = raw.index.unique()
 
-# Embed categorical variables into dummy variables, if conditioning on vegetation class and land use
-data_cat = pd.get_dummies( data[['classid', 'igbp_land_use']])
-
 # Get data dimensions to match LSTM model dimensions
 INPUT_FEATURES = data.select_dtypes(include = ['int', 'float']).drop(columns = 'GPP_NT_VUT_REF').shape[1]
 
-# Get categorial data dimensions for RNN model
 if args.conditional:
+    # Embed categorical variables into dummy variables, if conditioning on vegetation class and land use
+    data_cat = pd.get_dummies( data[['classid', 'igbp_land_use']])
+
+    # Get categorial data dimensions for RNN model
     CONDITIONAL_FEATURES = data_cat.shape[1]
-else:
-    CONDITIONAL_FEATURES = 0
 
 # Initialise data.frame to store GPP predictions, from the trained LSTM model
 y_pred_sites = {}
@@ -84,9 +80,10 @@ for s in sites:
     # Split data (numerical time series and categorical) for leave-site-out cross validation
     # A single site is kept for testing and all others are used for training
     data_train = data.loc[ data.index != s ]
-    data_cat_train = data_cat.loc[ data_cat.index != s]
     data_test = data.loc[ data.index == s]
-    data_cat_test = data_cat.loc[ data_cat.index == s]
+    if args.conditional:
+        data_cat_train = data_cat.loc[ data_cat.index != s]
+        data_cat_test = data_cat.loc[ data_cat.index == s]
 
     # Get a mask to discard imputed testing values in the model evaluation call
     mask_imputed = [ not m for m in raw.loc[ raw.index == s].isna() ]
@@ -100,8 +97,12 @@ for s in sites:
     # print('Testing data: ', data_test.shape[0], '\n')
 
     # Format pytorch dataset for the data loader
-    train_ds = gpp_dataset(data_train, data_cat_train, train_mean, train_std)
-    test_ds = gpp_dataset(data_test, data_cat_test, train_mean, train_std)
+    if args.conditional:
+        train_ds = gpp_dataset_cat(data_train, data_cat_train, train_mean, train_std)
+        test_ds = gpp_dataset_cat(data_test, data_cat_test, train_mean, train_std)
+    else:
+        train_ds = gpp_dataset(data_train, train_mean, train_std)
+        test_ds = gpp_dataset(data_test, train_mean, train_std)
 
     # Run data loader with batch_size = 1
     # Due to different time series lengths per site,
@@ -112,10 +113,14 @@ for s in sites:
     ## Define model to be trained
 
     # Initialise the LSTM model, set layer dimensions to match data
-    model = Model(input_dim = INPUT_FEATURES, conditional_dim = CONDITIONAL_FEATURES, 
-                  hidden_dim = args.hidden_dim,
-                  conditional = args.conditional,
-                  num_layers = 1).to(device = args.device)
+    if args.conditional:
+        model = ModelCond(input_dim = INPUT_FEATURES, conditional_dim = CONDITIONAL_FEATURES, 
+                        hidden_dim = args.hidden_dim,
+                        num_layers = 1).to(device = args.device)
+    else:
+        model = Model(input_dim = INPUT_FEATURES, 
+                        hidden_dim = args.hidden_dim,
+                        num_layers = 1).to(device = args.device)
 
     # Initialise the optimiser
     optimizer = torch.optim.Adam(model.parameters())
@@ -131,8 +136,10 @@ for s in sites:
         
         # Perform one round of training, doing backpropagation for each training site
         # Obtain the cumulative MSE (training loss) and R2
-        train_loss, train_r2 = train_loop(train_dl, model, optimizer,
-                                          args.device)
+        if(args.conditional):
+            train_loss, train_r2 = train_loop_cat(train_dl, model, optimizer, args.device)
+        else:
+            train_loss, train_r2 = train_loop(train_dl, model, optimizer, args.device)
 
         
 
@@ -141,8 +148,10 @@ for s in sites:
         writer.add_scalar("r2_mean/train", train_r2, epoch)         # summed R2, will not be in [0,1] 
 
         # Evaluate model on test set, removing imputed GPP values
-        test_loss, test_r2, y_pred = test_loop(test_dl, model, mask_imputed,
-                                               args.device)
+        if(args.conditional):
+            test_loss, test_r2, y_pred = test_loop_cat(test_dl, model, mask_imputed, args.device)
+        else:
+            test_loss, test_r2, y_pred = test_loop(test_dl, model, mask_imputed, args.device)
         
         # Log tensorboard testing values
         writer.add_scalar("Loss/test", test_loss, epoch)
@@ -159,6 +168,13 @@ for s in sites:
 
     print(f"R2 score for site {s}:")
     print(r2)
+
+    # Save model weights from last epoch
+    if len(args.output_file)==0:
+        torch.save(model,
+            f = f"../model/weights/lstm_lso_epochs_{args.n_epochs}_conditional_{args.conditional}_{s}.pt")
+    else:
+        torch.save(model, f = f"../model/weights/{args.output_file}_{s}.pt")
 
     # Stop logging, for this site
     writer.close()
