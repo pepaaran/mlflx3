@@ -6,7 +6,6 @@ import torch
 import torch.nn.functional as F
 from sklearn.metrics import r2_score
 
-
 def train_loop(dataloader, model, optimizer, DEVICE):
 
     # Initiate training losses, to aggregate over sites
@@ -17,8 +16,7 @@ def train_loop(dataloader, model, optimizer, DEVICE):
     model.train()
 
     # Loop over all training sites
-    for x, y in dataloader:
-
+    for x, y, mask in dataloader:
         # Send tensors to the correct device
         x = x.to(DEVICE)
         y = y.to(DEVICE)
@@ -63,7 +61,7 @@ def train_loop_cat(dataloader, model, optimizer, DEVICE):
     model.train()
 
     # Loop over all training sites
-    for x, y, c in dataloader:
+    for x, y, c, mask in dataloader:
 
         # Send tensors to the correct device
         x = x.to(DEVICE)
@@ -99,7 +97,7 @@ def train_loop_cat(dataloader, model, optimizer, DEVICE):
     return train_loss, train_r2
 
 
-def test_loop(dataloader, model, mask, DEVICE):
+def test_loop(dataloader, model, DEVICE):
 
     # Set model to evaluation mode
     model.eval()
@@ -112,7 +110,7 @@ def test_loop(dataloader, model, mask, DEVICE):
     with torch.no_grad():
 
         # Get testing data from dataloader
-        for x, y in dataloader:
+        for x, y, mask in dataloader:
 
             # Send tensors to the correct device
             x = x.to(DEVICE)
@@ -131,6 +129,9 @@ def test_loop(dataloader, model, mask, DEVICE):
             # Transform prediction tensor into numpy array
             y_pred = y_pred.detach().cpu().numpy()
 
+            # Get mask as a Boolean list, from the torch tensor given by the data loader
+            mask = mask.numpy()[0]
+
             # Compute R2 on non-imputed testing data
             test_r2 += r2_score(y_true = y.detach().cpu().numpy()[mask],
                                y_pred = y_pred[mask])
@@ -140,7 +141,7 @@ def test_loop(dataloader, model, mask, DEVICE):
     return test_loss, test_r2, y_pred
 
 
-def test_loop_cat(dataloader, model, mask, DEVICE):
+def test_loop_cat(dataloader, model, DEVICE):
 
     # Set model to evaluation mode
     model.eval()
@@ -153,7 +154,7 @@ def test_loop_cat(dataloader, model, mask, DEVICE):
     with torch.no_grad():
 
         # Get testing data from dataloader
-        for x, y, c in dataloader:
+        for x, y, c, mask in dataloader:
 
             # Send tensors to the correct device
             x = x.to(DEVICE)
@@ -172,6 +173,9 @@ def test_loop_cat(dataloader, model, mask, DEVICE):
 
             # Transform prediction tensor into numpy array
             y_pred = y_pred.detach().cpu().numpy()
+
+            # Get mask as a Boolean list, from the torch tensor given by the data loader
+            mask = mask.numpy()[0]
 
             # Compute R2 on non-imputed testing data
             test_r2 += r2_score(y_true = y.detach().cpu().numpy()[mask],

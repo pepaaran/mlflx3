@@ -16,10 +16,10 @@ class gpp_dataset_cat(Dataset):
             train_std (float): Standard deviation of training data for scaling features.
         """
         
-        # Select numeric variables only, without GPP
+        # Select numeric variables only, without GPP and aridity index
         x_num = x.select_dtypes(include = ['int', 'float'])
-        x_num = x_num.loc[:, ~x_num.columns.str.startswith('GPP')]
-
+        x_num = x_num.drop(columns = ['GPP_NT_VUT_REF', 'ai'])
+        
         # Center data, according to training data center
         x_centered = (x_num - train_mean)/train_std
 
@@ -33,6 +33,9 @@ class gpp_dataset_cat(Dataset):
         # Define target        
         self.y = torch.tensor(x['GPP_NT_VUT_REF'].values,
                               dtype = torch.float32)
+        
+        # Define mask for imputed values
+        self.mask = x['not_imputed'].values
 
         # Define vector of sites corresponding to the rows in x
         # to be used for indexing
@@ -54,11 +57,12 @@ class gpp_dataset_cat(Dataset):
 
         Returns:
             Thruple of numerical and categorical covariates and target variable for the specified site.
+            A vector with the mask for imputed values is also returned.
         """
         
         # Select rows corresponding to site idx
         rows = [s == self.sites[idx] for s in self.sitename]
-        return self.x[rows], self.y[rows], self.c[rows]
+        return self.x[rows], self.y[rows], self.c[rows], self.mask[rows]
   
     def __len__(self):
         """
@@ -73,8 +77,9 @@ class gpp_dataset_cat(Dataset):
 
 def compute_center(x):
 
-    # Select numeric variables only
+    # Select numeric variables only, without GPP and aridity index
     x_num = x.select_dtypes(include = ['int', 'float'])
+    x_num = x_num.drop(columns = ['GPP_NT_VUT_REF', 'ai'])
 
     # Calculate mean and standard deviation, per column
     x_mean = x_num.mean()
@@ -97,7 +102,7 @@ class gpp_dataset(Dataset):
         
         # Select numeric variables only, without GPP
         x_num = x.select_dtypes(include = ['int', 'float'])
-        x_num = x_num.loc[:, ~x_num.columns.str.startswith('GPP')]
+        x_num = x_num.drop(columns = ['GPP_NT_VUT_REF', 'ai'])
 
         # Center data, according to training data center
         x_centered = (x_num - train_mean)/train_std
@@ -110,6 +115,9 @@ class gpp_dataset(Dataset):
         # Define target        
         self.y = torch.tensor(x['GPP_NT_VUT_REF'].values,
                               dtype = torch.float32)
+        
+        # Define mask for imputed values
+        self.mask = x['not_imputed'].values
 
         # Define vector of sites corresponding to the rows in x
         # to be used for indexing
@@ -131,11 +139,12 @@ class gpp_dataset(Dataset):
 
         Returns:
             Tuple of numerical covariates and target variable for the specified site.
+            A vector with the mask for imputed values is also returned.
         """
         
         # Select rows corresponding to site idx
         rows = [s == self.sites[idx] for s in self.sitename]
-        return self.x[rows], self.y[rows]
+        return self.x[rows], self.y[rows], self.mask[rows]
   
     def __len__(self):
         """
