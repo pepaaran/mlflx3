@@ -159,7 +159,7 @@ for s in sites:
 # Save predictions into a data.frame
 df_out = pd.read_csv('../data/raw/df_20210510.csv', index_col=0)[['date', 'GPP_NT_VUT_REF']]
 df_out = df_out[df_out.index != 'CN-Cng']
-print(y_pred_sites.get('AU-ASM'))
+
 for s in df_out.index.unique():
     df_out.loc[[i == s for i in df_out.index], 'gpp_lstm'] = np.asarray(y_pred_sites.get(s))
 
