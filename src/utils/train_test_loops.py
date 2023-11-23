@@ -105,6 +105,8 @@ def test_loop(dataloader, model, DEVICE):
     # Initiate testing losses, to aggregate over sites (if there are more than one)
     test_loss = 0.0
     test_r2 = 0.0
+    # Initiate counter for number of sites used to average the R2 score
+    n_sites = 0
 
     # Stop computing gradients during the following code chunk:d
     with torch.no_grad():
@@ -136,9 +138,11 @@ def test_loop(dataloader, model, DEVICE):
             test_r2 += r2_score(y_true = y.detach().cpu().numpy()[mask],
                                y_pred = y_pred[mask])
             
+            n_sites += 1  # Increase counter
+            
 
     # Return computed testing loss
-    return test_loss, test_r2, y_pred
+    return test_loss, test_r2/n_sites, y_pred
 
 
 def test_loop_cat(dataloader, model, DEVICE):
@@ -149,6 +153,8 @@ def test_loop_cat(dataloader, model, DEVICE):
     # Initiate testing losses, to aggregate over sites (if there are more than one)
     test_loss = 0.0
     test_r2 = 0.0
+    # Initiate counter for number of sites used to average the R2 score
+    n_sites = 0
 
     # Stop computing gradients during the following code chunk:d
     with torch.no_grad():
@@ -181,6 +187,8 @@ def test_loop_cat(dataloader, model, DEVICE):
             test_r2 += r2_score(y_true = y.detach().cpu().numpy()[mask],
                                y_pred = y_pred[mask])
             
+            n_sites += 1   # Increase counter
+            
 
     # Return computed testing loss
-    return test_loss, test_r2, y_pred
+    return test_loss, test_r2/n_sites, y_pred
