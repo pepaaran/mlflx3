@@ -86,10 +86,6 @@ def train_model_cat(data, data_cat, model, optimizer, writer, n_epochs, DEVICE, 
     # Separate categorical variables into train-val
     data_cat_train = data_cat.loc[[any(site == s for s in sites_train) for site in data_cat.index]]
     data_cat_val = data_cat.loc[[any(site == s for s in sites_val) for site in data_cat.index]]
-    
-    # Get a mask to discard imputed testing values in the validation loss calculation
-    raw_val = data_raw.loc[[any(site == s for s in sites_val) for site in data_raw.index]]
-    mask_imputed = [ not m for m in raw_val.loc[ raw_val.index == s].isna() ]
 
     # Calculate mean and standard deviation to center the data
     train_mean, train_std = compute_center(data_train)
@@ -116,14 +112,14 @@ def train_model_cat(data, data_cat, model, optimizer, writer, n_epochs, DEVICE, 
         
         # Perform one round of training, doing backpropagation for each training site
         # Obtain the cumulative MSE (training loss) and R2
-        train_loss, train_r2 = train_loop(train_dl, model, optimizer, DEVICE)
+        train_loss, train_r2 = train_loop_cat(train_dl, model, optimizer, DEVICE)
 
         # Log tensorboard training values
         writer.add_scalar("mse_loss/train", train_loss, epoch)
         writer.add_scalar("r2_mean/train", train_r2, epoch)         # summed R2, will not be in [0,1] 
 
         # Evaluate model on test set, removing imputed GPP values
-        val_loss, val_r2, y_pred = test_loop(val_dl, model, mask_imputed, DEVICE)
+        val_loss, val_r2, y_pred = test_loop_cat(val_dl, model, DEVICE)
         
         # Log tensorboard testing values
         writer.add_scalar("mse_loss/validation", val_loss, epoch)
@@ -144,8 +140,6 @@ def train_model_cat(data, data_cat, model, optimizer, writer, n_epochs, DEVICE, 
         if patience_counter >= patience:
             print(f"Early stopping at epoch {epoch}. No improvement in test R2 for {patience} epochs.")
             break
-
-    print(f"R2 score for site {s}:  {best_r2}")
 
     # Load the best model's weights and return the model object
     if best_model:
