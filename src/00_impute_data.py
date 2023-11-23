@@ -1,4 +1,5 @@
-# This script loads the raw dataset, removes unnecessary columns, imputes missing values using K-nearest neighbors
+# This script loads the raw dataset, removes unnecessary columns, adds site metadata (aridity index),
+# imputes missing values using K-nearest neighbors
 # for specific columns, and then saves the cleaned and imputed dataset to a new CSV file named 'df_imputed.csv'.
 
 # Load dependencies
@@ -8,6 +9,10 @@ import pandas as pd
 # Load the raw dataset from a CSV file and remove unnecessary columns
 # about site characteristics and net ecosystem fluxes (too correlated with GPP)
 data = pd.read_csv('../data/raw/df_20210510.csv', index_col=0).drop(columns=['lat', 'lon', 'elv','c4','whc','LE_F_MDS','NEE_VUT_REF'])
+
+# Read metadata from FLUXNET sites to obtain aridity index (ai)
+df_meta = pd.read_csv("../data/external/fluxnet2015_sites_metainfo.csv", index_col = 0)
+df_meta.set_index('mysitename', inplace=True)
 
 # Remove data for the site 'CN-Cng' due to missing meta-data
 data = data[data.index != 'CN-Cng']
@@ -34,6 +39,12 @@ for s in sites:
     x = df[df.index == s].values
     x = impute.fit_transform(x)
     data.loc[data.index == s, 'GPP_NT_VUT_REF'] = x[:,-1]
+
+print("Merging aridity index from FLUXNET metadata")
+
+# Merge the data with the metadata based on their indices
+# The aridity index will be used for the stratified train-test splits
+data = pd.merge(data, df_meta[['ai']], left_on='sitename', right_index=True, how='left')
 
 # Save the cleaned and imputed dataset to a new CSV file    
 data.to_csv('../data/processed/df_imputed.csv')
