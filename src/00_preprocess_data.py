@@ -46,6 +46,10 @@ print("Merging aridity index from FLUXNET metadata")
 # The aridity index will be used for the stratified train-test splits
 data = pd.merge(data, df_meta[['ai']], left_on='sitename', right_index=True, how='left')
 
+# Add a column indicating whether the GPP values were original (True) or imputed (False)
+# to be used as a mask in the model testing
+data['not_imputed'] = ~df['GPP_NT_VUT_REF'].isna()
+
 # Save the cleaned and imputed dataset to a new CSV file    
 data.to_csv('../data/processed/df_imputed.csv')
 print("Imputed data saved to data/processed/df_imputed.csv")
