@@ -49,7 +49,7 @@ print(f"> Epochs: {args.n_epochs}")
 print(f"> Condition on categorical variables: {args.conditional}")
 print(f"> Early stopping after {args.patience} epochs without improvement")
 
-# Read imputed and raw data
+# Read imputed data, including variables for stratified train-test split and imputation flag
 data = pd.read_csv('../data/processed/df_imputed.csv', index_col=0)
 
 # Create list of sites for leave-site-out cross validation
@@ -122,7 +122,7 @@ for s in sites:
     # Save model weights from best epoch
     if len(args.output_file)==0:
         torch.save(model,
-            f = f"../model/weights/lstm_lso_epochs_{args.n_epochs}_conditional_{args.conditional}_{s}.pt")
+            f = f"../model/weights/lstm_lso_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_cond_{args.conditional}_{s}.pt")
     else:
         torch.save(model, f = f"../model/weights/{args.output_file}_{s}.pt")
 
@@ -165,6 +165,6 @@ for s in df_out.index.unique():
 
 # Save to a csv, to be processed in R
 if len(args.output_file)==0:
-    df_out.to_csv(f"../model/preds/lstm_lso_epochs_{args.n_epochs}_conditional_{args.conditional}.csv")   
+    df_out.to_csv(f"../model/preds/lstm_lso_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_conditional_{args.conditional}.csv")   
 else:
     df_out.to_csv("../model/preds/" + args.output_file)
