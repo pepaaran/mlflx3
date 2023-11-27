@@ -48,6 +48,7 @@ print(f"> Device: {args.device}")
 print(f"> Epochs: {args.n_epochs}")
 print(f"> Condition on categorical variables: {args.conditional}")
 print(f"> Early stopping after {args.patience} epochs without improvement")
+print(f"Hidden dimension of LSTM model: {args.hidden_dim}")
 
 # Read imputed data, including variables for stratified train-test split and imputation flag
 data = pd.read_csv('../data/processed/df_imputed.csv', index_col=0)
@@ -152,8 +153,8 @@ for s in sites:
     # Save prediction for the left-out site
     y_pred_sites[s] = y_pred
 
-    print(f"R2 score for site {s}:")
-    print(test_r2)
+    print(f"R2 score for site {s}: {test_r2}")
+    print("")
 
 
 # Save predictions into a data.frame
