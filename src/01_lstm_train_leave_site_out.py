@@ -48,8 +48,9 @@ print(f"> Device: {args.device}")
 print(f"> Epochs: {args.n_epochs}")
 print(f"> Condition on categorical variables: {args.conditional}")
 print(f"> Early stopping after {args.patience} epochs without improvement")
+print(f"Hidden dimension of LSTM model: {args.hidden_dim}")
 
-# Read imputed and raw data
+# Read imputed data, including variables for stratified train-test split and imputation flag
 data = pd.read_csv('../data/processed/df_imputed.csv', index_col=0)
 
 # Create list of sites for leave-site-out cross validation
@@ -100,7 +101,10 @@ for s in sites:
     optimizer = torch.optim.Adam(model.parameters())
 
     # Initiate tensorboard logging instance for this site
-    writer = SummaryWriter(log_dir = "../model/runs", comment = s)
+    if len(args.output_file) == 0:
+        writer = SummaryWriter(log_dir = f"../model/runs/lstm_lso_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_conditional_{args.conditional}/{s}")
+    else:
+        writer = SummaryWriter(log_dir = f"../model/runs/{args.output_file}/{s}")
 
 
     ## Train the model
@@ -122,7 +126,7 @@ for s in sites:
     # Save model weights from best epoch
     if len(args.output_file)==0:
         torch.save(model,
-            f = f"../model/weights/lstm_lso_epochs_{args.n_epochs}_conditional_{args.conditional}_{s}.pt")
+            f = f"../model/weights/lstm_lso_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_cond_{args.conditional}_{s}.pt")
     else:
         torch.save(model, f = f"../model/weights/{args.output_file}_{s}.pt")
 
@@ -152,8 +156,8 @@ for s in sites:
     # Save prediction for the left-out site
     y_pred_sites[s] = y_pred
 
-    print(f"R2 score for site {s}:")
-    print(test_r2)
+    print(f"R2 score for site {s}: {test_r2}")
+    print("")
 
 
 # Save predictions into a data.frame
@@ -165,6 +169,6 @@ for s in df_out.index.unique():
 
 # Save to a csv, to be processed in R
 if len(args.output_file)==0:
-    df_out.to_csv(f"../model/preds/lstm_lso_epochs_{args.n_epochs}_conditional_{args.conditional}.csv")   
+    df_out.to_csv(f"../model/preds/lstm_lso_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_conditional_{args.conditional}.csv")   
 else:
     df_out.to_csv("../model/preds/" + args.output_file)
