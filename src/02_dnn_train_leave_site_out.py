@@ -74,7 +74,10 @@ for s in sites:
     optimizer = torch.optim.Adam(model.parameters())
 
     # Initiate tensorboard logging instance for this site
-    writer = SummaryWriter(log_dir = "../model/runs", comment = s)
+    if len(args.output_file) == 0:
+        writer = SummaryWriter(log_dir = f"../model/runs/dnn_lso_epochs_{args.n_epochs}_patience_{args.patience}/{s}")
+    else:
+        writer = SummaryWriter(log_dir = f"../model/runs/{args.output_file}/{s}")
 
 
     ## Train the model
@@ -114,7 +117,7 @@ for s in sites:
     y_pred_sites[s] = y_pred
 
     print(f"R2 score for site {s}: {test_r2}")
-    print("\n")
+    print("")
 
     
 

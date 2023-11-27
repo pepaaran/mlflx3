@@ -101,7 +101,10 @@ for s in sites:
     optimizer = torch.optim.Adam(model.parameters())
 
     # Initiate tensorboard logging instance for this site
-    writer = SummaryWriter(log_dir = "../model/runs", comment = s)
+    if len(args.output_file) == 0:
+        writer = SummaryWriter(log_dir = f"../model/runs/lstm_lso_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_conditional_{args.conditional}/{s}")
+    else:
+        writer = SummaryWriter(log_dir = f"../model/runs/{args.output_file}/{s}")
 
 
     ## Train the model
