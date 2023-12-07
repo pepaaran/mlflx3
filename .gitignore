@@ -158,4 +158,22 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+
+# hidden settings files
 .Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.DS_Store
+
+# source files
+src/*.o
+src/*.so
+src/*.dll
+
+# vignette builds
+vignettes/*.html
+
+# documentation dir
+docs/
