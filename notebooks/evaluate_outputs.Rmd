@@ -257,19 +257,7 @@ ggplot(data = r2_rolling |>
 ```
 
 Implement the rolling R2 calculation, for all sites.
-```{r}
-# Join LSTM and DNN results
-rolling_r2_sites <- lstm_lso |>
-  left_join(
-    dnn_lso,
-    by = c("sitename", "date", "GPP_NT_VUT_REF")
-  ) |>
-  group_by(sitename) %>%
-  reframe(r2_lstm = rolling_rsq(., truth = 'GPP_NT_VUT_REF', estimate = "gpp_lstm"),
-          r2_dnn = rolling_rsq(., truth = 'GPP_NT_VUT_REF', estimate = 'gpp_dnn'))
-```
-
-```{r}
+```{r, eval = FALSE}
 # Get LSTM and DNN rolling R2 scores
 sites <- df_metadata$sitename
 n_sites <- length(sites)
@@ -320,6 +308,10 @@ for(site in sites[-1]){
 
 # Write results
 saveRDS(rolling_r2_sites, file = here::here("notebooks/rolling_r2_sites.rda"))
+```
+
+```{r, echo = FALSE}
+readRDS(file = here::here("notebooks/rolling_r2_sites.rda"))
 ```
 
 Aggregate the evolution of the R2 over all sites, for the same day (counting from the start of measurements).
