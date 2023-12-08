@@ -1,0 +1,368 @@
+---
+title: "Evaluating GPP predictions"
+author: "Pepa Arán"
+date: "2023-11-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(patchwork)
+library(ggrepel)
+library(yardstick)
+library(rbeni)    # get it by devtools::install_github("https://github.com/stineb/rbeni.git")
+library(cowplot)
+library(jcolors)
+library(ingestr)
+library(khroma)
+library(ggplot2)
+
+source(here::here("R/rolling_rsq.R"))
+```
+
+### Read in model predictions
+
+```{r}
+# Leave-site-out predictions from LSTM model without categorical covariates
+lstm_lso <- read_csv("model/preds/lstm_lso_epochs_150_patience_20_hdim_256_conditional_0.csv")
+
+# Leave-site-out predictions from LSTM model with less parameters
+lstm_lso_128 <- read_csv("model/preds/lstm_lso_epochs_150_patience_20_hdim_128_conditional_0.csv")
+
+# Leave-site-out predictions from DNN
+dnn_lso <- read_csv("model/preds/dnn_lso_epochs_150_patience_20.csv")
+
+# Leave-vegetation-out predictions from LSTM
+
+
+# Leave-continent-out predictions from LSTM
+
+
+# P-model simulations
+pmodel <- read_csv("data/external/pmodel_outputs.csv")
+
+# Input data frame containing sites metadata
+df_metadata <- read_csv("data/processed/df_imputed.csv") |>
+  dplyr::group_by(sitename) |>
+  dplyr::summarise(ai = first(ai),
+                   koeppen_code = first(koeppen_code),
+                   classid = first(classid))
+```
+
+### Evaluate LSOCV
+
+```{r}
+
+r2 <- lstm_lso |> 
+  
+  ## LSTM
+  group_by(sitename) |> 
+  nest() |> 
+  mutate(out = purrr::map(data, ~rsq(., GPP_NT_VUT_REF, gpp_lstm, na_rm = TRUE)),
+         out_trad = purrr::map(data, ~rsq_trad(., GPP_NT_VUT_REF, gpp_lstm, na_rm = TRUE))) |> 
+  mutate(rsq_lstm = purrr::map_dbl(out, ~pull(., .estimate)),
+         rsq_trad_lstm = purrr::map_dbl(out_trad, ~pull(., .estimate))) |> 
+  dplyr::select(sitename, rsq_lstm, rsq_trad_lstm) |>
+  dplyr::left_join(
+    pmodel |>
+      
+      ## P-model
+      group_by(sitename) |>
+      nest() |>
+      mutate(out = purrr::map(data, ~rsq(., gpp, mod, na_rm = TRUE)),
+             out_trad = purrr::map(data, ~rsq_trad(., gpp, mod, na_rm = TRUE))) |>
+      mutate(rsq_pmodel = purrr::map_dbl(out, ~pull(., .estimate)),
+             rsq_trad_pmodel = purrr::map_dbl(out_trad, ~pull(., .estimate))) |>
+      select(sitename, rsq_pmodel, rsq_trad_pmodel),
+    by = 'sitename'
+  ) |>
+  dplyr::left_join(
+    dnn_lso |> 
+  
+      ## DNN
+      group_by(sitename) |> 
+      nest() |> 
+      mutate(out = purrr::map(data, ~rsq(., GPP_NT_VUT_REF, gpp_dnn, na_rm = TRUE)),
+           out_trad = purrr::map(data, ~rsq_trad(., GPP_NT_VUT_REF, 
+                                                 gpp_dnn, na_rm = TRUE))) |> 
+    mutate(rsq_dnn = purrr::map_dbl(out, ~pull(., .estimate)),
+           rsq_trad_dnn = purrr::map_dbl(out_trad, ~pull(., .estimate))) |> 
+    dplyr::select(sitename, rsq_dnn, rsq_trad_dnn),
+  by = 'sitename'
+  ) |>
+  dplyr::left_join(
+    lstm_lso_128 |> 
+  
+      ## LSTM - smaller hidden dimension
+      group_by(sitename) |> 
+      nest() |> 
+      mutate(out = purrr::map(data, ~rsq(., GPP_NT_VUT_REF, gpp_lstm, na_rm = TRUE)),
+           out_trad = purrr::map(data, ~rsq_trad(., GPP_NT_VUT_REF, 
+                                                 gpp_lstm, na_rm = TRUE))) |> 
+    mutate(rsq_lstm_128 = purrr::map_dbl(out, ~pull(., .estimate)),
+           rsq_trad_lstm_128 = purrr::map_dbl(out_trad, ~pull(., .estimate))) |> 
+    dplyr::select(sitename, rsq_lstm_128, rsq_trad_lstm_128),
+  by = 'sitename'
+  ) |>
+  dplyr::left_join(
+    df_metadata |>
+      dplyr::select(sitename, ai, classid, koeppen_code),
+    by = 'sitename'
+  )
+
+plot(rsq_trad_lstm ~ rsq_trad_pmodel, data = r2, main = "LSTM, Traditional R2")
+abline(a=0, b=1, lty=2)
+
+plot(rsq_trad_dnn ~ rsq_trad_pmodel, data = r2, main = "DNN, Traditional R2")
+abline(a=0, b=1, lty=2)
+
+plot(rsq_lstm ~ rsq_pmodel, data = r2, ylim = c(0,1), xlim = c(0,1),
+     main = "LSTM, correlation R2")
+abline(a=0, b=1, lty=2)
+
+plot(rsq_dnn ~ rsq_pmodel, data = r2,  ylim = c(0,1), xlim = c(0,1),
+     main = "DNN, correlation R2")
+abline(a=0, b=1, lty=2)
+
+```
+# Paper figures
+
+````{r}
+# LSTM - AI
+gg1 <- r2 |> 
+  ggplot(aes(x = ai, y = rsq_lstm, color = classid, label = sitename)) +
+  geom_point(size = 2) +
+  theme_classic() +
+  labs(x = "P/PET", y = expression(paste(italic(R)^2))) +
+  khroma::scale_color_discreterainbow(name = "") +
+  geom_text_repel(min.segment.length = 0,
+                  segment.size = 0.2,
+                  size = 2,
+                  seed = 42,
+                  box.padding = 0.5,
+                  color = "grey50")
+
+# LSTM - veg type
+gg2 <- r2 |> 
+  ggplot(aes(x = reorder(classid, rsq_lstm), y = rsq_lstm)) +
+  geom_boxplot(fill = "azure3", outlier.shape = NA) +
+  geom_jitter(width = 0.25, color = "grey50") +
+  theme_classic() +
+  labs(x = "Vegetation type", y = expression(paste(italic(R)^2)))
+
+# LSTM - koeppen climate
+gg3 <- r2 |> 
+  drop_na(koeppen_code) |> 
+  filter(koeppen_code != "-") |> 
+  ggplot(aes(x = reorder(koeppen_code, rsq_lstm), y = rsq_lstm)) +
+  geom_boxplot(fill = "azure3", outlier.shape = NA) +
+  geom_jitter(width = 0.25, color = "grey50") +
+  theme_classic() +
+  labs(x = "Koeppen-Geiger climate class", y = expression(paste(italic(R)^2)))
+
+leftpanel <- cowplot::plot_grid(gg2, gg3, labels = c("b", "c"), ncol = 1)
+
+cowplot::plot_grid(gg1, leftpanel,
+                   rel_widths = c(1.2, 1), 
+                   labels = c("a", ""), 
+                   ncol = 2)
+```
+
+Now, we produce the same figures with the traditional R2.
+````{r}
+# LSTM - AI
+gg1 <- r2 |> 
+  ggplot(aes(x = ai, y = rsq_trad_lstm, color = classid, label = sitename)) +
+  geom_point(size = 2) +
+  theme_classic() +
+  labs(x = "P/PET", y = expression(paste(italic(R)^2))) +
+  khroma::scale_color_discreterainbow(name = "") +
+  geom_text_repel(min.segment.length = 0,
+                  segment.size = 0.2,
+                  width = 0.1,
+                  size = 2,
+                  seed = 42,
+                  box.padding = 0.5,
+                  color = "grey50")
+
+# LSTM - veg type
+gg2 <- r2 |> 
+  ggplot(aes(x = reorder(classid, rsq_trad_lstm), y = rsq_trad_lstm)) +
+  geom_boxplot(fill = "azure3", outlier.shape = NA) +
+  geom_jitter(width = 0.25, color = "grey50") +
+  theme_classic() +
+  labs(x = "Vegetation type", y = expression(paste(italic(R)^2)))
+
+# LSTM - koeppen climate
+gg3 <- r2 |> 
+  drop_na(koeppen_code) |> 
+  filter(koeppen_code != "-") |> 
+  ggplot(aes(x = reorder(koeppen_code, rsq_trad_lstm), y = rsq_trad_lstm)) +
+  geom_boxplot(fill = "azure3", outlier.shape = NA) +
+  geom_jitter(width = 0.25, color = "grey50") +
+  theme_classic() +
+  labs(x = "Koeppen-Geiger climate class", y = expression(paste(italic(R)^2)))
+
+leftpanel <- cowplot::plot_grid(gg2, gg3, labels = c("b", "c"), ncol = 1)
+
+cowplot::plot_grid(gg1, leftpanel,
+                   rel_widths = c(1.2, 1), 
+                   labels = c("a", ""), 
+                   ncol = 2
+                   )
+```
+# Comparison of LSTM and DNN with rolling R2 values
+
+```{r}
+# Get the length of time series, since the longest records of data
+# will show learning the best (supposedly)
+lstm_lso |>
+  group_by(sitename) |>
+  summarise(n_days = n()) |>
+  arrange(desc(n_days))
+```
+
+```{r}
+
+site <- 'US-Ha1'    # change site name to observe difference
+window <- 365
+
+# Compute colling R2 for the LSTM and DNN results
+r2_rolling <- data.frame(
+  lstm = lstm_lso |>
+    filter(sitename == site) |>
+    rolling_rsq(truth = 'GPP_NT_VUT_REF', estimate = "gpp_lstm"),
+  dnn = dnn_lso |>
+    filter(sitename == site) |>
+    rolling_rsq(truth = 'GPP_NT_VUT_REF', estimate = 'gpp_dnn')
+)
+
+r2_rolling <- cbind(r2_rolling, 
+                    lstm_lso |>
+                      filter(sitename == site) |>
+                      select(date) |>
+                      slice_tail(n = nrow(r2_rolling)))
+
+ggplot(data = r2_rolling |>
+         tidyr::pivot_longer(cols=c(lstm, dnn))) +
+  geom_line(aes(y=value, color=name, x=date)) +
+  labs(title = paste(site, "  rsq_lstm =", r2[r2$sitename == site, 'rsq_lstm'] |>
+                       round(3),
+                     "  rsq_dnn =", r2[r2$sitename == site, 'rsq_dnn'] |>
+                       round(3)))
+
+
+```
+
+Implement the rolling R2 calculation, for all sites.
+```{r}
+# Join LSTM and DNN results
+rolling_r2_sites <- lstm_lso |>
+  left_join(
+    dnn_lso,
+    by = c("sitename", "date", "GPP_NT_VUT_REF")
+  ) |>
+  group_by(sitename) %>%
+  reframe(r2_lstm = rolling_rsq(., truth = 'GPP_NT_VUT_REF', estimate = "gpp_lstm"),
+          r2_dnn = rolling_rsq(., truth = 'GPP_NT_VUT_REF', estimate = 'gpp_dnn'))
+```
+
+```{r}
+# Get LSTM and DNN rolling R2 scores
+sites <- df_metadata$sitename
+n_sites <- length(sites)
+
+# Set window to compute rolling R2
+window <- 365
+
+# Initialize object with results for first site
+rolling_r2_sites <- data.frame(
+  sitename = sites[1],
+  lstm = lstm_lso |>
+    filter(sitename == sites[1]) |>
+    rolling_rsq(truth = 'GPP_NT_VUT_REF', estimate = "gpp_lstm"),
+  dnn = dnn_lso |>
+    filter(sitename == sites[1]) |>
+    rolling_rsq(truth = 'GPP_NT_VUT_REF', estimate = 'gpp_dnn'))
+
+rolling_r2_sites <- cbind(rolling_r2_sites,
+                          lstm_lso |>
+                            filter(sitename == sites[1]) |>
+                            select(date) |>
+                            slice_tail(n = nrow(rolling_r2_sites)))
+
+# Continue computing results for other sites
+for(site in sites[-1]){
+  print(paste("Computing rolling mean for:", site))
+  
+    r2_rolling <- data.frame(
+      sitename = site,
+      lstm = lstm_lso |>
+        filter(sitename == site) |>
+        rolling_rsq(truth = 'GPP_NT_VUT_REF', estimate = "gpp_lstm"),
+      dnn = dnn_lso |>
+        filter(sitename == site) |>
+        rolling_rsq(truth = 'GPP_NT_VUT_REF', estimate = 'gpp_dnn')
+    )
+    
+    r2_rolling <- cbind(r2_rolling, 
+                        lstm_lso |>
+                          filter(sitename == site) |>
+                          select(date) |>
+                          slice_tail(n = nrow(r2_rolling)))
+    
+  # Append to results from other sites
+  rolling_r2_sites <- rbind(rolling_r2_sites,
+                            r2_rolling)
+}
+
+# Write results
+saveRDS(rolling_r2_sites, file = here::here("notebooks/rolling_r2_sites.rda"))
+```
+
+Aggregate the evolution of the R2 over all sites, for the same day (counting from the start of measurements).
+```{r}
+grouped <- rolling_r2_sites |>
+          select(sitename, lstm, dnn) |>
+          group_by(sitename)
+
+# Aggregate the R2 scores, for the same "day since start of measurements"
+rolling_r2_aggregated <- lapply(1:2193,     # length of the longest time series
+       function(i){ summarise(grouped, lstm = nth(lstm, i),
+                              dnn = nth(dnn, i)) |>
+           select(lstm, dnn) |> 
+           apply(MARGIN = 2, FUN = mean, na.rm = TRUE)}) |>
+  bind_rows() 
+
+# Save aggregated values
+saveRDS(rolling_r2_aggregated, file = here::here("notebooks/rolling_r2_aggregated.rda"))
+
+rolling_r2_aggregated |>
+  mutate(id = window + (1:2193)) |>
+  pivot_longer(cols = c(lstm, dnn)) |>
+  ggplot() +
+  geom_line(aes(y=value, color=name, x=id)) |>
+  labs(title = "Rolling R2 score, averaged over all sites",
+       xlab = "Day since first measurement",
+       ylab = "R2")
+
+```
+
+
+Plotting a few sites.
+```{r}
+rolling_r2_sites |>
+  filter(sitename %in% c('US-Ha1', ''))
+  pivot_longer(cols = c(lstm, dnn)) |>
+  ggplot() +
+  geom_line(aes(y=value, color=name, x=date)) +
+  labs(title = paste(site, "  rsq_lstm =", r2[r2$sitename == site, 'rsq_lstm'] |>
+                       round(3),
+                     "  rsq_dnn =", r2[r2$sitename == site, 'rsq_dnn'] |>
+                       round(3))) +
+  facet_wrap( ~ sitename)
+
+```
+
