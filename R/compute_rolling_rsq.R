@@ -85,7 +85,7 @@ for(site in sites[-1]){
 }
 
 # Write results
-saveRDS(here::here("notebooks/rolling_r2_sites.rda"))
+saveRDS(rolling_r2_sites, file = here::here("notebooks/rolling_r2_sites.rda"))
 
 grouped <- rolling_r2_sites |>
   select(sitename, lstm, dnn) |>
