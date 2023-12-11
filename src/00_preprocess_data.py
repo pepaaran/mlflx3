@@ -3,12 +3,26 @@
 # for specific columns, and then saves the cleaned and imputed dataset to a new CSV file named 'df_imputed.csv'.
 
 # Load dependencies
+import argparse
 from sklearn.impute import KNNImputer
 import pandas as pd
+
+# Parse arguments 
+parser = argparse.ArgumentParser(description='Data pre-processing')
+
+parser.add_argument('-w', '--wscal', type=int, default=0,
+                    help='Keep wscal in the input variables (wscal=0) or remove it (other)')
+
+args = parser.parse_args()
 
 # Load the raw dataset from a CSV file and remove unnecessary columns
 # about site characteristics and net ecosystem fluxes (too correlated with GPP)
 data = pd.read_csv('../data/raw/df_20210510.csv', index_col=0).drop(columns=['lat', 'lon', 'elv','c4','whc','LE_F_MDS','NEE_VUT_REF'])
+
+if args.wscal:
+    # Remove wscal (computed by SPLASH), which accounts for the memory of the water balance
+    data = data.drop(columns = ['wscal'])
+    print("Removing wscal from the variables used for modelling")
 
 # Read metadata from FLUXNET sites to obtain aridity index (ai)
 df_meta = pd.read_csv("../data/external/fluxnet2015_sites_metainfo.csv", index_col = 0)
