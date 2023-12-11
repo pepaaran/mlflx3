@@ -94,6 +94,35 @@ individual data analyses.
 
 ## Running code
 
+To reproduce the results used to study the modelling of GPP using LSTM and DNN,
+you can execute the code in this repository in this workflow. 
+
+> NOTE: The implementation allows for more flexibility, changing training parameters, dimension of the neural networks, etc. Check the scripts to explore the different possibilities.
+
+
+The raw input data, obtained from FLUXNET2015 for a selection of sites, is 
+contained in `data/raw/df_20210510.csv`. First, you will need to process these
+data by removing non-relevant columns, imputing missing values of covariates and
+GPP (using a simple KNN) and adding meta information about the sites.
+
+```
+cd src
+python 00_preprocess_data.py
+```
+
+Next, you can train the LSTM and DNN models on the processed data, using leave-site-out
+cross-validation to evaluate the model performance. The model
+outputs will be saved in the `model` folder, including the model weights for 
+the best epoch for each site (from the leave-site-out cross-validation) in 
+`model/weights`, the training logs from tensorboard in `model/runs` and a csv
+containing the predictions for each site in `model/preds`.
+
+```
+python 01_lstm_train_leave_site_out.py --n_epochs=150 --patience=20
+python 02_dnn_train_leave_site_out.py --n_epochs=150 --patience=20
+```
+
+
 Here you should provide an example for how to run your code, from beginning to end, script
 by script. The more detailed (yet straight to the point) you are, the happier your future self
 and all your collaborators will be.
@@ -101,3 +130,38 @@ and all your collaborators will be.
 Data should be kept outside of your repository, whenever it is too big to fit into GitHub
 or there are privacy concerns. In these cases, give explanations of where users can download
 or obtain the data and where they should save it, such that the whole workflow runs smoothly.
+
+### Tips for training the models on a remote server
+
+The conda environment specified in `environment.yml` has been tested on the 
+GECO workstations and should function, while `environment_cuda12.yml` is adapted
+to the lab's laptops which have a different CUDA version.
+
+In order to train the models on the workstations, without risking the training
+being interrupted by, for example, an interrupted VPN connection, you may use
+[nohup](). This makes the process run in the background and saves the standard
+output in a text file.
+
+```
+cd src
+nohup python 01_lstm_train_leave_site_out.py 1>&2 lstm_train.out &
+```
+
+It is also possible to supervise the model training remotely, running
+TensorBoard as follows. You should run the following code from the terminal and
+then navigate to [http://localhost:16006/](http://localhost:16006/).
+
+```
+# Start SSH connection, routed to a different port
+ssh -L 16006:127.0.0.1:6006 username@ip_address  # for workstation2
+
+# Move to project directory and activate conda environment
+cd mlflx3
+conda activate mlflx3_env    # tensorboard must be installed
+
+# Launch tensorboard dashboard
+tensorboard --logdir model/runs/lstm_lso_epochs_150_patience_20_hdim_256_conditional_0/
+# change the runs folder to match the training output file name
+```
+
+
