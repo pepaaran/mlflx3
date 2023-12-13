@@ -60,7 +60,7 @@ for s in sites:
 print("Merging aridity index from FLUXNET metadata")
 
 # Merge the data with the metadata based on their indices
-# The aridity index will be used for the stratified train-test splits
+# The aridity index will be used for the stratified train-test splits, not for modelling
 data = pd.merge(data, df_meta[['ai']], left_on='sitename', right_index=True, how='left')
 
 # Add a column indicating whether the GPP values were original (True) or imputed (False)
