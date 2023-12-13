@@ -62,8 +62,6 @@ def train_test_split_sites(df):
         sites_train = train_df.index
         sites_val = val_df.index
 
-    print(sites_train)
-
     # Separate the time series data (including the imputed values mask in the last column)
     df_train = df.loc[[any(site == s for s in sites_train) for site in df.index]]
     df_val = df.loc[[any(site == s for s in sites_val) for site in df.index]]
