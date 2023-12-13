@@ -12,7 +12,7 @@ def train_test_split_sites(df):
     20% of data is used for validation.
 
     Parameters:
-    - df (pd.DataFrame): DataFrame containing 'TA_F', 'classid', and 'sitename' columns
+    - df (pd.DataFrame): DataFrame containing flux variables used for training and 'TA_F', 'classid', and 'sitename' columns
 
     Returns:
     - df_train (pd.DataFrame): DataFrame with the train data
