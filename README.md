@@ -9,10 +9,10 @@ Run the following code from the terminal to set up your repository and conda env
 Make sure that [miniconda](https://docs.conda.io/projects/miniconda/en/latest/miniconda-install.html) 
 and [python](https://wiki.python.org/moin/BeginnersGuide/Download) are installed prior. 
 ```
-git clone git@github.com:pepaaran/python_proj_template.git
-cd python_proj_template
-conda env create -f environment.yml --name myenv
-conda activate myenv
+git clone git@github.com:pepaaran/mlflx3.git
+cd mlflx3
+conda env create -f environment.yml --name mlflx3_env
+conda activate mlflx3_env
 ```
 The `environment.yml` file in this template includes basic data science packages. When starting a new project,
 you may want to assign a custom name to the environment, install any remaining packages used during
