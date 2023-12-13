@@ -11,6 +11,24 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 def train_model(data, model, optimizer, writer, n_epochs, DEVICE, patience):
+    """
+    Trains a PyTorch model, using a train-validation split, with training on all training sites per epoch
+    and early stopping based on the mean squared error (MSE) for validation sites.
+
+    Args:
+    - data (DataFrame): Pandas DataFrame containing the training data.
+    - model (torch.nn.Module): PyTorch model to be trained.
+    - optimizer (torch.optim.Optimizer): Optimizer used for training the model.
+    - writer (SummaryWriter): TensorBoard SummaryWriter for logging.
+    - n_epochs (int): Maximum number of training epochs.
+    - DEVICE (str): Device to run the model on (e.g., 'cuda:0' or 'cpu').
+    - patience (int): An integer used as patience for early stopping.
+
+    Returns:
+    - best_r2 (float): R2 score obtained during training, associated to the epoch with lowest validation MSE.
+    - train_mean (array): Mean values used for normalizing the training data, to be reused in model testing.
+    - train_std (array): Standard deviation values used for normalizing the training data, to be reused in model testing.
+    """
 
     # Separate train-val split
     data_train, data_val, sites_train, sites_val = train_test_split_sites(data)
@@ -30,8 +48,8 @@ def train_model(data, model, optimizer, writer, n_epochs, DEVICE, patience):
     val_dl = DataLoader(val_ds, batch_size = 1, shuffle = True)
 
     
-    # Start recording R2 score after each epoch, initialise at -Inf
-    best_r2 = -np.Inf
+    # Start recording loss (MSE) after each epoch, initialise at Inf
+    best_loss = np.Inf
 
     # Initialize best model
     best_model = None
@@ -54,12 +72,14 @@ def train_model(data, model, optimizer, writer, n_epochs, DEVICE, patience):
         writer.add_scalar("mse_loss/validation", val_loss, epoch)
         writer.add_scalar("r2_mean/validation", val_r2, epoch)
 
-        # Save the model from the best epoch, based on the test R2
-        if val_r2 >= best_r2:
+        # Save the model from the best epoch, based on the validation loss
+        if val_loss <= best_loss:
 
-            best_r2 = val_r2
+            best_loss = val_loss
             # Save the best model's state dictionary
             best_model = model.state_dict()
+            # Save the best model's R2 score
+            best_r2 = val_r2
 
             patience_counter = 0  # Reset patience counter
         else:
@@ -67,7 +87,7 @@ def train_model(data, model, optimizer, writer, n_epochs, DEVICE, patience):
 
         # Check for early stopping
         if patience_counter >= patience:
-            print(f"Early stopping at epoch {epoch}. No improvement in test R2 for {patience} epochs.")
+            print(f"Early stopping at epoch {epoch}. No improvement in validation loss for {patience} epochs.")
             break
 
     # Load the best model's weights and return the model object
@@ -79,6 +99,26 @@ def train_model(data, model, optimizer, writer, n_epochs, DEVICE, patience):
 
 
 def train_model_cat(data, data_cat, model, optimizer, writer, n_epochs, DEVICE, patience):
+    """
+    Trains a PyTorch model with two input datasets (numerical and categorical), using a train-validation split, 
+    with training on all training sites per epoch
+    and early stopping based on the mean squared error (MSE) for validation sites.
+
+    Args:
+    - data (DataFrame): Pandas DataFrame containing the numerical training data.
+    - data_cat (DataFrame): Pandas DataFrame containing the categorical training data as dummy variables.
+    - model (torch.nn.Module): PyTorch model to be trained.
+    - optimizer (torch.optim.Optimizer): Optimizer used for training the model.
+    - writer (SummaryWriter): TensorBoard SummaryWriter for logging.
+    - n_epochs (int): Maximum number of training epochs.
+    - DEVICE (str): Device to run the model on (e.g., 'cuda:0' or 'cpu').
+    - patience (int): An integer used as patience for early stopping.
+
+    Returns:
+    - best_r2 (float): R2 score obtained during training, associated to the epoch with lowest validation MSE.
+    - train_mean (array): Mean values used for normalizing the training data, to be reused in model testing.
+    - train_std (array): Standard deviation values used for normalizing the training data, to be reused in model testing.
+    """
 
     # Separate train-val split
     data_train, data_val, sites_train, sites_val = train_test_split_sites(data)
@@ -101,8 +141,8 @@ def train_model_cat(data, data_cat, model, optimizer, writer, n_epochs, DEVICE, 
     val_dl = DataLoader(val_ds, batch_size = 1, shuffle = True)
 
     
-    # Start recording R2 score after each epoch, initialise at -Inf
-    best_r2 = -np.Inf
+    # Start recording loss (MSE) after each epoch, initialise at Inf
+    best_loss = np.Inf
 
     # Initialize best model
     best_model = None
@@ -125,12 +165,14 @@ def train_model_cat(data, data_cat, model, optimizer, writer, n_epochs, DEVICE, 
         writer.add_scalar("mse_loss/validation", val_loss, epoch)
         writer.add_scalar("r2_mean/validation", val_r2, epoch)
 
-        # Save the model from the best epoch, based on the test R2
-        if val_r2 >= best_r2:
+        # Save the model from the best epoch, based on the validation loss
+        if val_loss <= best_loss:
 
-            best_r2 = val_r2
+            best_loss = val_loss
             # Save the best model's state dictionary
             best_model = model.state_dict()
+            # Save the best model's R2 score
+            best_r2 = val_r2
 
             patience_counter = 0  # Reset patience counter
         else:
@@ -138,7 +180,7 @@ def train_model_cat(data, data_cat, model, optimizer, writer, n_epochs, DEVICE, 
 
         # Check for early stopping
         if patience_counter >= patience:
-            print(f"Early stopping at epoch {epoch}. No improvement in test R2 for {patience} epochs.")
+            print(f"Early stopping at epoch {epoch}. No improvement in validation loss for {patience} epochs.")
             break
 
     # Load the best model's weights and return the model object
