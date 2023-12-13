@@ -25,6 +25,9 @@ if args.wscal:
     print("Removing wscal from the variables used for modelling")
 
 # Read metadata from FLUXNET sites to obtain aridity index (ai)
+# This file was provided by Beni and includes only 53 sites, in the future it may
+# contain more variables to extend the flux data, but the pipeline to obtain
+# the site characteristics should be written transparently.
 df_meta = pd.read_csv("../data/external/fluxnet2015_sites_metainfo.csv", index_col = 0)
 df_meta.set_index('mysitename', inplace=True)
 
