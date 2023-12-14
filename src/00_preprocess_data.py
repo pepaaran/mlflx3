@@ -67,6 +67,11 @@ data = pd.merge(data, df_meta[['ai']], left_on='sitename', right_index=True, how
 # to be used as a mask in the model testing
 data['not_imputed'] = ~df['GPP_NT_VUT_REF'].isna()
 
+# Filter data to remove sites with less than 5 years of data
+lengths = data.groupby(data.index).size()/365
+lengths = lengths[lengths > 5]
+data = data[data.index.isin(lengths.index)]
+
 # Save the cleaned and imputed dataset to a new CSV file    
 data.to_csv('../data/processed/df_imputed.csv')
 print("Imputed data saved to data/processed/df_imputed.csv")
