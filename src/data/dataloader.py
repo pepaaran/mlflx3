@@ -79,7 +79,7 @@ def compute_center(x):
 
     # Select numeric variables only, without GPP and aridity index
     x_num = x.select_dtypes(include = ['int', 'float'])
-    x_num = x_num.drop(columns = ['GPP_NT_VUT_REF', 'ai'])
+    x_num = x_num.drop(columns = ['GPP_NT_VUT_REF', 'ai', "chunk_id"])
 
     # Calculate mean and standard deviation, per column
     x_mean = x_num.mean()
@@ -102,7 +102,7 @@ class gpp_dataset(Dataset):
         
         # Select numeric variables only, without GPP
         x_num = x.select_dtypes(include = ['int', 'float'])
-        x_num = x_num.drop(columns = ['GPP_NT_VUT_REF', 'ai'])
+        x_num = x_num.drop(columns = ['GPP_NT_VUT_REF', 'ai', "chunk_id"])
 
         # Center data, according to training data center
         x_centered = (x_num - train_mean)/train_std
@@ -118,17 +118,15 @@ class gpp_dataset(Dataset):
         
         # Define mask for imputed values
         self.mask = x['not_imputed'].values
+        self.chunks = x["chunk_id"].unique()
 
-        # Define vector of sites corresponding to the rows in x
-        # to be used for indexing
-        self.sitename = x.index
-
-        # Define list of unique sites
-        self.sites = x.index.unique()
+        # For each chunk, store the corresponding rows in x
+        self.chunk_to_row = {}
+        for chunk in self.chunks:
+            self.chunk_to_row[chunk] = x["chunk_id"] == chunk
 
         # Define length of dataset
-        # self.len = x.shape[0]         # number of rows
-        self.len = len(self.sites)      # number of sites
+        self.len = len(x["chunk_id"].unique())      # number of chunks
 
     def __getitem__(self, idx):
         """
@@ -141,11 +139,11 @@ class gpp_dataset(Dataset):
             Tuple of numerical covariates and target variable for the specified site.
             A vector with the mask for imputed values is also returned.
         """
-        
-        # Select rows corresponding to site idx
-        rows = [s == self.sites[idx] for s in self.sitename]
+        chunks_idx = self.chunks[idx]
+        rows = self.chunk_to_row[chunks_idx]
         return self.x[rows], self.y[rows], self.mask[rows]
-  
+
+
     def __len__(self):
         """
         Get the total number of samples (i.e. sites) in the dataset.
