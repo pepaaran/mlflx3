@@ -23,7 +23,7 @@ import torch
 # Parse arguments 
 parser = argparse.ArgumentParser(description='CV LSTM')
 
-parser.add_argument('-v', '--vegetation', type=str,
+parser.add_argument('-v', '--vegetation', type=str, required=True,
                     help='String indicating the vegetation type used for training (DBF, ENF, GRA or MF)')
 
 parser.add_argument('-device', '--device', default='cuda:0' ,type=str,
@@ -66,7 +66,6 @@ data_v, data_other = separate_veg_type(data, args.vegetation, veg_types)
 
 # Create list of sites for cross validation (within chosen vegetation type)
 sites = data_v.index.unique()
-print(sites)
 
 # Get data dimensions to match LSTM model dimensions
 INPUT_FEATURES = data.select_dtypes(include = ['int', 'float']).drop(columns = ['GPP_NT_VUT_REF', 'ai']).shape[1]
@@ -80,8 +79,14 @@ y_pred_sites = {}
 for s in sites:
     print(f"Test Site: {s}")
 
+    # TODO: For less common vegetation types, there aren't enough sites to do a proper
+    # stratified train-test split, because not all combinations of arid-wet and cold-hot 
+    # can be represented in both the train and validation data. A solution needs to be found for this. 
+
     # Split data (numerical time series and categorical) for leave-site-out cross validation
     # A single site is kept for testing and all others are used for training
+    # The sites from other vegetation types are also used to evaluate the generalizability
+    # of the model (data_other)
     data_train = data_v.loc[ data_v.index != s ]
     data_test = pd.concat([data_v.loc[ data_v.index == s], data_other])
     print(data_train.index.unique())
@@ -97,9 +102,9 @@ for s in sites:
 
     # Initiate tensorboard logging instance for this site
     if len(args.output_file) == 0:
-        writer = SummaryWriter(log_dir = f"../model/runs/lstm_lvo_{args.vegetation}_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}/{s}")
+        writer = SummaryWriter(log_dir = f"../model/runs/lstm_lvo_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}/{args.vegetation}_{s}")
     else:
-        writer = SummaryWriter(log_dir = f"../model/runs/{args.output_file}/{s}")
+        writer = SummaryWriter(log_dir = f"../model/runs/{args.output_file}/{args.vegetation}_{s}")
 
     ## Train the model
 
@@ -113,9 +118,9 @@ for s in sites:
     # Save model weights from best epoch
     if len(args.output_file)==0:
         torch.save(model,
-            f = f"../model/weights/lstm_lvo_{args.vegetation}_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_{s}.pt")
+            f = f"../model/weights/lstm_lvo_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_{args.vegetation}_{s}.pt")
     else:
-        torch.save(model, f = f"../model/weights/{args.output_file}_{s}.pt")
+        torch.save(model, f = f"../model/weights/{args.output_file}_{args.vegetation}_{s}.pt")
 
     # Stop logging, for this site
     writer.close()
@@ -136,11 +141,14 @@ for s in sites:
     # Save prediction for the left-out site
     y_pred_sites[s] = y_pred
 
+    print('Prediction output:')
+    print(y_pred.shape)
+
     print(f"R2 score for site {s}: {test_r2}")
     print("")
 
 
-# Save predictions into a data.frame
+# Save GPP bias into a data.frame
 df_out = pd.read_csv('../data/raw/df_20210510.csv', index_col=0)[['date', 'GPP_NT_VUT_REF']]
 df_out = df_out[df_out.index != 'CN-Cng']
 
@@ -149,6 +157,6 @@ for s in df_out.index.unique():
 
 # Save to a csv, to be processed in R
 if len(args.output_file)==0:
-    df_out.to_csv(f"../model/preds/lstm_lvo_{args.vegetation}_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}.csv")   
+    df_out.to_csv(f"../model/preds/lstm_lvo_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_{args.vegetation}.csv")   
 else:
     df_out.to_csv("../model/preds/" + args.output_file)
