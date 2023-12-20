@@ -102,9 +102,9 @@ for s in sites:
 
     # Initiate tensorboard logging instance for this site
     if len(args.output_file) == 0:
-        writer = SummaryWriter(log_dir = f"../model/runs/lstm_lso_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_conditional_{args.conditional}/{s}")
+        writer = SummaryWriter(log_dir = f"../models/runs/lstm_lso_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_conditional_{args.conditional}/{s}")
     else:
-        writer = SummaryWriter(log_dir = f"../model/runs/{args.output_file}/{s}")
+        writer = SummaryWriter(log_dir = f"../models/runs/{args.output_file}/{s}")
 
 
     ## Train the model
@@ -126,9 +126,9 @@ for s in sites:
     # Save model weights from best epoch
     if len(args.output_file)==0:
         torch.save(model,
-            f = f"../model/weights/lstm_lso_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_cond_{args.conditional}_{s}.pt")
+            f = f"../models/weights/lstm_lso_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_cond_{args.conditional}_{s}.pt")
     else:
-        torch.save(model, f = f"../model/weights/{args.output_file}_{s}.pt")
+        torch.save(model, f = f"../models/weights/{args.output_file}_{s}.pt")
 
     # Stop logging, for this site
     writer.close()
@@ -169,6 +169,6 @@ for s in df_out.index.unique():
 
 # Save to a csv, to be processed in R
 if len(args.output_file)==0:
-    df_out.to_csv(f"../model/preds/lstm_lso_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_conditional_{args.conditional}.csv")   
+    df_out.to_csv(f"../models/preds/lstm_lso_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_conditional_{args.conditional}.csv")   
 else:
-    df_out.to_csv("../model/preds/" + args.output_file)
+    df_out.to_csv("../models/preds/" + args.output_file)

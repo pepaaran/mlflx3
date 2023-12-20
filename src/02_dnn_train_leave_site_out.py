@@ -75,9 +75,9 @@ for s in sites:
 
     # Initiate tensorboard logging instance for this site
     if len(args.output_file) == 0:
-        writer = SummaryWriter(log_dir = f"../model/runs/dnn_lso_epochs_{args.n_epochs}_patience_{args.patience}/{s}")
+        writer = SummaryWriter(log_dir = f"../models/runs/dnn_lso_epochs_{args.n_epochs}_patience_{args.patience}/{s}")
     else:
-        writer = SummaryWriter(log_dir = f"../model/runs/{args.output_file}/{s}")
+        writer = SummaryWriter(log_dir = f"../models/runs/{args.output_file}/{s}")
 
 
     ## Train the model
@@ -92,9 +92,9 @@ for s in sites:
     # Save model weights from best epoch
     if len(args.output_file)==0:
         torch.save(model,
-            f = f"../model/weights/dnn_lso_epochs_{args.n_epochs}_patience_{args.patience}_{s}.pt")
+            f = f"../models/weights/dnn_lso_epochs_{args.n_epochs}_patience_{args.patience}_{s}.pt")
     else:
-        torch.save(model, f = f"../model/weights/{args.output_file}_{s}.pt")
+        torch.save(model, f = f"../models/weights/{args.output_file}_{s}.pt")
 
     # Stop logging, for this site
     writer.close()
@@ -130,6 +130,6 @@ for s in df_out.index.unique():
 
 # Save to a csv, to be processed in R
 if len(args.output_file)==0:
-    df_out.to_csv(f"../model/preds/dnn_lso_epochs_{args.n_epochs}_patience_{args.patience}.csv")   
+    df_out.to_csv(f"../models/preds/dnn_lso_epochs_{args.n_epochs}_patience_{args.patience}.csv")   
 else:
-    df_out.to_csv("../model/preds/" + args.output_file)
+    df_out.to_csv("../models/preds/" + args.output_file)
