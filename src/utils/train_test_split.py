@@ -19,6 +19,9 @@ def train_test_split_sites(df):
     - df_val (pd.DataFrame): DataFrame with the validation data
     """
 
+    # Set test-split size (0-1)
+    test_size = 0.2
+
     # Group by 'sitename' and calculate mean temperature
     grouped = df.groupby('sitename').agg({'TA_F': 'mean', 'classid': 'first', 'ai': 'first'})
 
@@ -38,7 +41,7 @@ def train_test_split_sites(df):
     if len(special_sites) == len(grouped.index.unique()):
         # If there are few sites for training (e.g. in leave-vegetation-out)
         # it may lead to all sites being "special", then split at random
-        train_df, val_df = train_test_split(grouped, test_size=0.2)
+        train_df, val_df = train_test_split(grouped, test_size=test_size)
 
         # Get train and validation sites
         sites_train = train_df.index
@@ -48,7 +51,7 @@ def train_test_split_sites(df):
         # If there is only one site per category, put it in the training set and split the rest
         # stratified by mean temperature and aridity.
         grouped = grouped.drop(special_sites)
-        train_df, val_df = train_test_split(grouped, test_size=0.2, stratify=grouped['combined_target'])
+        train_df, val_df = train_test_split(grouped, test_size=test_size, stratify=grouped['combined_target'])
 
         # Get train and validation sites
         sites_train = train_df.index.tolist() + special_sites    # Add weird sites to training set
@@ -56,7 +59,7 @@ def train_test_split_sites(df):
     
     else:
         # Use train_test_split to create two site groups, stratified by mean temperature and aridity
-        train_df, val_df = train_test_split(grouped, test_size=0.2, stratify=grouped['combined_target'])
+        train_df, val_df = train_test_split(grouped, test_size=test_size, stratify=grouped['combined_target'])
 
         # Get train and validation sites
         sites_train = train_df.index
