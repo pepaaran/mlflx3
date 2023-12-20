@@ -1,7 +1,6 @@
-# A template for a data science project using python
+# An implementation of GPP modelling with traditional and recursive neural networks
 
-This template is inspired by the 
-[cookiecutter data science template](https://drivendata.github.io/cookiecutter-data-science/).
+This repository is a refactoring of the [mlflx2](https://github.com/geco-bern/mlflx2) project.
 
 ## Setting up the repository
 
@@ -14,18 +13,7 @@ cd mlflx3
 conda env create -f environment.yml --name mlflx3_env
 conda activate mlflx3_env
 ```
-The `environment.yml` file in this template includes basic data science packages. When starting a new project,
-you may want to assign a custom name to the environment, install any remaining packages used during
-the project and update the environment file running:
-
-```
-conda env export --name myname
-```
-
-The previous code will update the packages specified in `environment.yml` to match all the
-packages installed in your current conda environment, with their versions. This is key to a reproducible
-workflow, so make sure that your environment file stays up to date with the packages (and versions)
-used in your project.
+The `environment.yml` file in this repository includes the packages necessary to run the python code to train the models on the GECO workstations. A second conda environment caleed `environment_cuda12.yml` was used to run the code on the GECO laptops, which have different GPUs and CUDA drivers versions. 
 
 To work with PyTorch and train models on a GPU, make sure that your CUDA drivers are compatible with 
 the `pytorch` version. Check how to install `pytorch` [here](https://pytorch.org/). Then you can check
@@ -40,6 +28,11 @@ torch.cuda.is_available()
 NOTE: If you need to use a package that is unavailable via conda, install it with pip after you've created the 
 conda environment. Do not play with conda again or you risk breaking your environment. Always write in the 
 README.md of your repository in detail how to reproduce your environment, step by step.
+
+The analysis of the GPP predictions is performed in R, borrowing from the previous [eval_mlflx.Rmd](https://github.com/geco-bern/mlflx2/blob/main/src/evaluation/eval_mlflx.Rmd). In order to ensure reproducibility, this repository is also an R project and the package versions used are saved in the `renv.lock` file. To use this, open the `mlflx3.Rproj` file in RStudio and load the necessary packages by running:
+```
+renv::restore()
+```
 
 ## Directory structure
 
