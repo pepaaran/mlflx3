@@ -1,6 +1,10 @@
-# An implementation of GPP modelling with traditional and recursive neural networks
+# An implementation of GPP modelling with traditional and recurrent neural networks
 
 This repository is a refactoring of the [mlflx2](https://github.com/geco-bern/mlflx2) project.
+
+#### Summary:
+
+git push
 
 ## Setting up the repository
 
@@ -44,16 +48,13 @@ individual data analyses.
 ├── LICENSE
 |
 ├── data
-│   ├── external       <- Data from third party sources.
-│   ├── interim        <- Intermediate data that has been transformed.
-│   ├── processed      <- The final, canonical data sets for modeling.
+│   ├── external       <- Data from third party sources, includes flux sites metadata.
+│   ├── processed      <- The final data sets for modeling.
 │   └── raw            <- The original, immutable data dump. Never touch.
 │
-├── models             <- Trained and serialized models, model predictions, or model summaries.
+├── models             <- Trained and serialized models (weights), model predictions, and trainings logs.
 │
-├── notebooks          <- Jupyter notebooks for exploration only. Naming convention should contain
-│                         the creator's initials, and a short `-` delimited description, e.g.
-│                         `1.0-pap-initial-data-exploration`.
+├── notebooks          <- Jupyter notebooks for exploration only. RMarkdowns for analysis of results.
 │
 ├── references         <- Data dictionaries, manuals, bibliography (.bib)
 │
@@ -68,21 +69,27 @@ individual data analyses.
 ├── src                <- Source code for use in this project.
 │   ├── __init__.py    <- Makes src a Python module.
 │   │
-│   ├── data           <- Scripts to download or generate data.
-│   │   └── 01_clean_dataset.py
+│   ├── data           <- Functions to preprocess and format data for pytorch use.
 │   │
-│   ├── features       <- Scripts to turn raw data into features for modeling.
-│   │   └── 02_build_features.py
+│   ├── features     
 │   │
-│   ├── models         <- Scripts to train models and then use trained models to make
-│   │   │                 predictions.
-│   │   ├── 03_train_model.py
-│   │   └── 04_predict_model.py
+│   ├── models         <- Functions to define model structures.
 │   │
-│   └── visualization  <- Scripts to create exploratory and results oriented visualizations
-│       └── 05_visualize.py
+│   ├── visualization  
+|   |
+│   └── utils          <- General purpose functions and functions to train and test models (train-test split, loops, etc.).
+│   │
+│   ├── 00_preprocess_data.py
+│   ├── 01_lstm_train_leave_site_out.py
+│   ├── 02_dnn_train_leave_site_out.py
+│   └── 03_lstm_train_leave_vegetation_out.py
+|
+├── R                  <- Contains custom R functions used in the results analysis.
 │
-└── .gitignore         <- Indicates which files should be ignored when pushing.
+├── .gitignore         <- Indicates which files should be ignored when pushing.
+├── mlflx3.Rproj       <- Makes the repository an R project
+├── renv.lock          <- Saves the package versions used in the R code
+└── 
 ```
 
 ## Running code
@@ -152,7 +159,7 @@ ssh -L 16006:127.0.0.1:6006 username@ip_address  # for workstation2
 cd mlflx3
 conda activate mlflx3_env    # tensorboard must be installed
 
-# Launch tensorboard dashboard
+# Launch tensorboard dashboard as usual
 tensorboard --logdir model/runs/lstm_lso_epochs_150_patience_20_hdim_256_conditional_0/
 # change the runs folder to match the training output file name
 ```
