@@ -122,14 +122,17 @@ python 01_lstm_train_leave_site_out.py --n_epochs=150 --patience=20
 python 02_dnn_train_leave_site_out.py --n_epochs=150 --patience=20
 ```
 
-
-Here you should provide an example for how to run your code, from beginning to end, script
-by script. The more detailed (yet straight to the point) you are, the happier your future self
-and all your collaborators will be.
-
-Data should be kept outside of your repository, whenever it is too big to fit into GitHub
-or there are privacy concerns. In these cases, give explanations of where users can download
-or obtain the data and where they should save it, such that the whole workflow runs smoothly.
+The code to perform the leave-vegetation-out and leave-continent-out cross-validation
+is still being finished. Together with the saved objects as for the normal LSTM and DNN,
+this analysis saves the mean bias for each site (models trained on different combinations
+of data).
+```
+# Train LSTM model, leaving one vegetation type out at a time
+python 03_lstm_train_leave_vegetation_out.py --group_name="DBF" --n_epochs=150 --patience=20
+python 03_lstm_train_leave_vegetation_out.py --group_name="ENF" --n_epochs=150 --patience=20
+python 03_lstm_train_leave_vegetation_out.py --group_name="GRA" --n_epochs=150 --patience=20
+python 03_lstm_train_leave_vegetation_out.py --group_name="MF" --n_epochs=150 --patience=20
+```
 
 ### Tips for training the models on a remote server
 
