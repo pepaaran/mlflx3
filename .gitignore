@@ -173,7 +173,10 @@ src/*.so
 src/*.dll
 
 # vignette builds
-vignettes/*.html
+notebooks/*.html
 
 # documentation dir
 docs/
+
+# tensorflow runs
+models/runs/
