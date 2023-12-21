@@ -84,7 +84,7 @@ for s_out in sites_other:
 # Loop over all sites of chosen vegetation type, 
 # An LSTM model is trained on all sites except the "left-out-site"
 # for a given number of epochs
-for s in [sites[1]]:
+for s in sites:
     print(f"Test Site: {s}")
 
     # TODO: For less common vegetation types, there aren't enough sites to do a proper
