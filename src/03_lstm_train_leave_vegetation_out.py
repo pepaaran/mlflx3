@@ -57,6 +57,10 @@ print(f"Hidden dimension of LSTM model: {args.hidden_dim}")
 # Read imputed data
 data = pd.read_csv('../data/processed/df_imputed.csv', index_col=0)
 
+# Read raw data to compute bias
+df_out = pd.read_csv('../data/raw/df_20210510.csv', index_col=0)[['date', 'GPP_NT_VUT_REF']]
+df_out = df_out[df_out.index != 'CN-Cng']
+
 # Define subset vegetation types (remove less frequent vegetation types from the analysis)
 # This vector will be used to subset the whole raw data for testing purposes, to avoid extra computations
 veg_types = ['DBF', 'ENF', 'GRA', 'MF']
@@ -64,19 +68,23 @@ veg_types = ['DBF', 'ENF', 'GRA', 'MF']
 # Separate data by vegetation type, for training and testing
 data_v, data_other = separate_veg_type(data, args.vegetation, veg_types)
 
-# Create list of sites for cross validation (within chosen vegetation type)
+# Create list of sites for cross validation (within chosen vegetation type) and for bias evaluation
 sites = data_v.index.unique()
+sites_other = data_other.index.unique()
 
 # Get data dimensions to match LSTM model dimensions
 INPUT_FEATURES = data.select_dtypes(include = ['int', 'float']).drop(columns = ['GPP_NT_VUT_REF', 'ai']).shape[1]
 
-# Initialise data.frame to store GPP predictions, from the trained LSTM model
+# Initialise data.frame to store GPP predictions and bias, from the trained LSTM model
 y_pred_sites = {}
+bias = {}
+for s_out in sites_other:
+    bias[s_out] = []
 
 # Loop over all sites of chosen vegetation type, 
 # An LSTM model is trained on all sites except the "left-out-site"
 # for a given number of epochs
-for s in sites:
+for s in [sites[1]]:
     print(f"Test Site: {s}")
 
     # TODO: For less common vegetation types, there aren't enough sites to do a proper
@@ -88,7 +96,8 @@ for s in sites:
     # The sites from other vegetation types are also used to evaluate the generalizability
     # of the model (data_other)
     data_train = data_v.loc[ data_v.index != s ]
-    data_test = pd.concat([data_v.loc[ data_v.index == s], data_other])
+    # data_test = pd.concat([data_v.loc[ data_v.index == s], data_other])       # old idea
+    data_test = data_v.loc[ data_v.index == s]
     print(data_train.index.unique())
     ## Define model to be trained
 
@@ -102,9 +111,9 @@ for s in sites:
 
     # Initiate tensorboard logging instance for this site
     if len(args.output_file) == 0:
-        writer = SummaryWriter(log_dir = f"../model/runs/lstm_lvo_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}/{args.vegetation}_{s}")
+        writer = SummaryWriter(log_dir = f"../models/runs/lstm_lvo_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}/{args.vegetation}_{s}")
     else:
-        writer = SummaryWriter(log_dir = f"../model/runs/{args.output_file}/{args.vegetation}_{s}")
+        writer = SummaryWriter(log_dir = f"../models/runs/{args.output_file}/{args.vegetation}_{s}")
 
     ## Train the model
 
@@ -118,14 +127,14 @@ for s in sites:
     # Save model weights from best epoch
     if len(args.output_file)==0:
         torch.save(model,
-            f = f"../model/weights/lstm_lvo_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_{args.vegetation}_{s}.pt")
+            f = f"../models/weights/lstm_lvo_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_{args.vegetation}_{s}.pt")
     else:
-        torch.save(model, f = f"../model/weights/{args.output_file}_{args.vegetation}_{s}.pt")
+        torch.save(model, f = f"../models/weights/{args.output_file}_{args.vegetation}_{s}.pt")
 
     # Stop logging, for this site
     writer.close()
 
-    ## Model evaluation
+    ## Model evaluation on leaf-out site
 
     # Format test pytorch dataset for the data loader
     test_ds = gpp_dataset(data_test, train_mean, train_std)
@@ -141,22 +150,51 @@ for s in sites:
     # Save prediction for the left-out site
     y_pred_sites[s] = y_pred
 
-    print('Prediction output:')
-    print(y_pred.shape)
-
     print(f"R2 score for site {s}: {test_r2}")
     print("")
 
+    # Compute prediction bias
+    bias[s] = np.mean(y_pred - df_out.loc[ df_out.index == s]['GPP_NT_VUT_REF'])
 
-# Save GPP bias into a data.frame
-df_out = pd.read_csv('../data/raw/df_20210510.csv', index_col=0)[['date', 'GPP_NT_VUT_REF']]
-df_out = df_out[df_out.index != 'CN-Cng']
+    print(f"Prediction bias for site {s}: {bias[s]}")
+    print("")
 
-for s in df_out.index.unique():
+    ## Model evaluation on other vegetations
+    
+    for s_other in sites_other:
+        # Format test pytorch dataset for the data loader, using data from onte site only
+        test_ds_other = gpp_dataset(data_other.loc[ data_other.index == s_other], 
+                                    train_mean, train_std)
+
+        # Run data loader with batch_size = 1
+        # Due to different time series lengths per site,
+        # we cannot load several sites per batch
+        test_dl = DataLoader(test_ds_other, batch_size = 1, shuffle = True)
+
+        # Evaluate model on test set, removing imputed GPP values
+        test_loss_other, test_r2_other, y_pred_other = test_loop(test_dl, model, args.device)
+
+        # Compute prediction bias, save to aggregate later
+        bias[s_other].append( np.mean(y_pred_other - df_out.loc[ df_out.index == s_other]['GPP_NT_VUT_REF']) )
+
+
+# Save GPP bias into a data.frame, averaging over all trained models for the sites of other veg types
+df_bias = pd.DataFrame({site:np.mean(b) for site,b in bias.items()}.items(),
+                       columns = ['sitename', 'bias']
+                       ).set_index('sitename')
+
+# Save to a csv, to be processed in R
+if len(args.output_file)==0:
+    df_bias.to_csv(f"../models/preds/bias_lstm_lvo_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_{args.vegetation}.csv")   
+else:
+    df_bias.to_csv("../models/preds/bias_" + args.output_file) 
+
+# Save GPP predictions into data.frame
+for s in sites:
     df_out.loc[[i == s for i in df_out.index], f'gpp_lstm_{args.vegetation}'] = np.asarray(y_pred_sites.get(s))
 
 # Save to a csv, to be processed in R
 if len(args.output_file)==0:
-    df_out.to_csv(f"../model/preds/lstm_lvo_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_{args.vegetation}.csv")   
+    df_out.to_csv(f"../models/preds/lstm_lvo_epochs_{args.n_epochs}_patience_{args.patience}_hdim_{args.hidden_dim}_{args.vegetation}.csv")   
 else:
-    df_out.to_csv("../model/preds/" + args.output_file)
+    df_out.to_csv("../models/preds/" + args.output_file)
