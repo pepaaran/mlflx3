@@ -4,7 +4,10 @@ This repository is a refactoring of the [mlflx2](https://github.com/geco-bern/ml
 
 #### Summary:
 
-git push
+This repository implements a machine learning workflow to predict GPP. The models considered are a traditional deep neural network
+(DNN), a recurrent neural network with an LSTM cell (Long-Short-Term-Memory) stacked with two extra connected layers, and a mixed model
+that concatenates the LSTM output with categorical variables and then stacks connected layers on top (indicated by the conditional
+argument in this implementation). The leave-site-out cross validation consists of  
 
 ## Setting up the repository
 
@@ -99,7 +102,6 @@ you can execute the code in this repository in this workflow.
 
 > NOTE: The implementation allows for more flexibility, changing training parameters, dimension of the neural networks, etc. Check the scripts to explore the different possibilities.
 
-
 The raw input data, obtained from FLUXNET2015 for a selection of sites, is 
 contained in `data/raw/df_20210510.csv`. First, you will need to process these
 data by removing non-relevant columns, imputing missing values of covariates and
@@ -133,6 +135,12 @@ python 03_lstm_train_leave_vegetation_out.py --group_name="ENF" --n_epochs=150 -
 python 03_lstm_train_leave_vegetation_out.py --group_name="GRA" --n_epochs=150 --patience=20
 python 03_lstm_train_leave_vegetation_out.py --group_name="MF" --n_epochs=150 --patience=20
 ```
+
+Finally, the analysis and visualization of results are implemented in an 
+RMarkdown file in `notebooks/evaluate_outputs.Rmd`. This file reads the GPP
+predictions from the `models/preds/` folder and produces a series of plots,
+some of them used for the initial manuscript. To knit this report or run the
+code chunks, you can open the file in RStudio and work inside the R Project.
 
 ### Tips for training the models on a remote server
 
