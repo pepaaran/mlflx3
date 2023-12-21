@@ -432,12 +432,13 @@ for(site in sites[-1]){
                             r2_rolling)
 }
 
-# Write results
+# Write results, because they take long to compute
 saveRDS(rolling_r2_sites, file = here::here("notebooks/rolling_r2_sites.rda"))
 # saveRDS(rolling_r2_sites, file = here::here("notebooks/rolling_r2_sites_wscal.rda"))
 ```
 
 ```{r, echo = FALSE}
+# Read in rolling R2 values if they've been read already
 rolling_r2_sites <- readRDS(file = here::here("notebooks/rolling_r2_sites.rda"))
 ```
 
@@ -455,13 +456,13 @@ rolling_r2_aggregated <- lapply(1:(ts_sites$n_days[1] - window),     # length of
            apply(MARGIN = 2, FUN = mean, na.rm = TRUE)}) |>
   bind_rows() 
 
-# Save aggregated values
+# Save aggregated values, it takes long to compute
 # saveRDS(rolling_r2_aggregated, file = here::here("notebooks/rolling_r2_aggregated.rda"))
 saveRDS(rolling_r2_aggregated, file = here::here("notebooks/rolling_r2_aggregated_wscal.rda"))
 ```
 
 ```{r, echo = FALSE}
-# Change filename if you want to observe other results
+# Change filename if you want to observe other results that have been already computed
 rolling_r2_aggregated <- readRDS(file = here::here("notebooks/rolling_r2_aggregated.rda"))
 ```
 
@@ -647,7 +648,7 @@ for(site in sites[-1]){
                             rmse_rolling)
 }
 
-# Write results
+# Write results, because they take long to compute. Read in later if wanted
 # saveRDS(rolling_rmse_sites, file = here::here("notebooks/rolling_rmse_sites.rda"))
 saveRDS(rolling_rmse_sites, file = here::here("notebooks/rolling_rmse_sites_wscal.rda"))
 ```
@@ -666,7 +667,7 @@ rolling_rmse_aggregated <- lapply(1:(ts_sites$n_days[1] - window),     # length 
            apply(MARGIN = 2, FUN = mean, na.rm = TRUE)}) |>
   bind_rows() 
 
-# Save aggregated values
+# Save aggregated values, they take long to compute. Read in later if wanted
 saveRDS(rolling_rmse_aggregated, file = here::here("notebooks/rolling_rmse_aggregated.rda"))
 ```
 
