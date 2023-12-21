@@ -7,7 +7,24 @@ This repository is a refactoring of the [mlflx2](https://github.com/geco-bern/ml
 This repository implements a machine learning workflow to predict GPP. The models considered are a traditional deep neural network
 (DNN), a recurrent neural network with an LSTM cell (Long-Short-Term-Memory) stacked with two extra connected layers, and a mixed model
 that concatenates the LSTM output with categorical variables and then stacks connected layers on top (indicated by the conditional
-argument in this implementation). The leave-site-out cross validation consists of  
+argument in this implementation). The models are trained following two different workflows, to evaluate the out-of-sample performance:
+
+- *Leave-site-out cross validation*: The whole time series from a single site is taken out as a test set. The remaining data is randomly split
+by sites, stratified based on the mean temperature and aridity of the sites, with 20\% of the sites used for validation and 80\%
+used for model training. The model is trained by minimizing the MSE for a maximum number of epochs and early stopping is used whenever the
+MSE on the validation set has not improved for a given number of epochs (set by the patience parameter). The best model (the one with
+the lowest MSE on the validation sites) is chosen and used to predict GPP on the left-out site (test data). Then the coefficient of 
+determination R2 is computed. By repeating this workflow for each site in the dataset, we obtain an R2 score for each site and 
+study the performance and generalization abilities of the machine learning models.
+
+- *Leave-group-out cross validation*: The sites in the dataset are split into groups based on vegetation type or continent. For each group,
+the model is trained with the leave-site-out procedure described above (hence there are less sites in the group and less data for training),
+resulting in one model per site in the group (trained on the remaining sites in the group, with a train-validation split and early
+stopping). To estimate the within-group and across-groups performance, we compute the bias of the GPP predictions (average difference
+between observed and predicted values) for the left-out sites within the group - within-group bias - and for all the sites outside of 
+the given group - across-group bias - averaged over all the trained models. 
+
+The DNN, LSTM and conditional LSTM models are compared against each other, but also against the P-model (mechanistic photosyntehsis model).
 
 ## Setting up the repository
 
