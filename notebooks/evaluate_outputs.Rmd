@@ -12,27 +12,34 @@ library(tidyverse)
 library(patchwork)
 library(ggrepel)
 library(yardstick)
-library(rbeni)    # get it by devtools::install_github("https://github.com/stineb/rbeni.git")
+# library(rbeni)    # get it by devtools::install_github("https://github.com/stineb/rbeni.git")
 library(cowplot)
-library(jcolors)
-library(ingestr)
+# library(jcolors)
+# library(ingestr)
 library(khroma)
 library(ggplot2)
 
 source(here::here("R/rolling_rsq.R"))
+source(here::here("R/rolling_rmse.R"))
 ```
 
-### Read in model predictions
+## Read in model predictions
 
 ```{r}
 # Leave-site-out predictions from LSTM model without categorical covariates
-lstm_lso <- read_csv("model/preds/lstm_lso_epochs_150_patience_20_hdim_256_conditional_0.csv")
+lstm_lso <- read_csv(here::here("models/preds/lstm_lso_epochs_150_patience_20_hdim_256_conditional_0.csv"))
+
+# Leave-site-out predictions from LSTM model without wscal
+lstm_wscal_lso <- read_csv(here::here("models/preds/lstm_lso_epochs_150_patience_20_hdim_256_conditional_0_no_wscal.csv"))
 
 # Leave-site-out predictions from LSTM model with less parameters
-lstm_lso_128 <- read_csv("model/preds/lstm_lso_epochs_150_patience_20_hdim_128_conditional_0.csv")
+lstm_lso_128 <- read_csv(here::here("models/preds/lstm_lso_epochs_150_patience_20_hdim_128_conditional_0.csv"))
 
 # Leave-site-out predictions from DNN
-dnn_lso <- read_csv("model/preds/dnn_lso_epochs_150_patience_20.csv")
+dnn_lso <- read_csv(here::here("models/preds/dnn_lso_epochs_150_patience_20.csv"))
+
+# Leave-site-out predictions from DNN without wscal
+dnn_wscal_lso <- read_csv(here::here("models/preds/dnn_lso_epochs_150_patience_20_no_wscal.csv"))
 
 # Leave-vegetation-out predictions from LSTM
 
@@ -41,30 +48,39 @@ dnn_lso <- read_csv("model/preds/dnn_lso_epochs_150_patience_20.csv")
 
 
 # P-model simulations
-pmodel <- read_csv("data/external/pmodel_outputs.csv")
+pmodel <- read_csv(here::here("data/external/pmodel_outputs.csv"))
 
 # Input data frame containing sites metadata
-df_metadata <- read_csv("data/processed/df_imputed.csv") |>
+df_metadata <- read_csv(here::here("data/processed/df_imputed.csv")) |>
   dplyr::group_by(sitename) |>
   dplyr::summarise(ai = first(ai),
                    koeppen_code = first(koeppen_code),
-                   classid = first(classid))
+                   classid = first(classid)) |>
+  # Add coordinates from another file
+  dplyr::left_join(
+    read_csv(here::here("data/external/fluxnet2015_sites_metainfo.csv")) |>
+      dplyr::select(mysitename, lon, lat, elv),
+    by = join_by( sitename == mysitename)
+  )
 ```
 
-### Evaluate LSOCV
+## Evaluate LSOCV
 
 ```{r}
-
+# Compute R2 (traditional and correlation definitions) and RMSE
+# for all trained models
 r2 <- lstm_lso |> 
   
   ## LSTM
   group_by(sitename) |> 
   nest() |> 
   mutate(out = purrr::map(data, ~rsq(., GPP_NT_VUT_REF, gpp_lstm, na_rm = TRUE)),
-         out_trad = purrr::map(data, ~rsq_trad(., GPP_NT_VUT_REF, gpp_lstm, na_rm = TRUE))) |> 
+         out_trad = purrr::map(data, ~rsq_trad(., GPP_NT_VUT_REF, gpp_lstm, na_rm = TRUE)),
+         out_rmse = purrr::map(data, ~rmse(., GPP_NT_VUT_REF, gpp_lstm, na_rm = TRUE))) |> 
   mutate(rsq_lstm = purrr::map_dbl(out, ~pull(., .estimate)),
-         rsq_trad_lstm = purrr::map_dbl(out_trad, ~pull(., .estimate))) |> 
-  dplyr::select(sitename, rsq_lstm, rsq_trad_lstm) |>
+         rsq_trad_lstm = purrr::map_dbl(out_trad, ~pull(., .estimate)),
+         rmse_lstm = purrr::map_dbl(out_rmse, ~pull(., .estimate))) |> 
+  dplyr::select(sitename, rsq_lstm, rsq_trad_lstm, rmse_lstm) |>
   dplyr::left_join(
     pmodel |>
       
@@ -72,10 +88,12 @@ r2 <- lstm_lso |>
       group_by(sitename) |>
       nest() |>
       mutate(out = purrr::map(data, ~rsq(., gpp, mod, na_rm = TRUE)),
-             out_trad = purrr::map(data, ~rsq_trad(., gpp, mod, na_rm = TRUE))) |>
+             out_trad = purrr::map(data, ~rsq_trad(., gpp, mod, na_rm = TRUE)),
+             out_rmse = purrr::map(data, ~rmse(., gpp, mod, na_rm = TRUE))) |>
       mutate(rsq_pmodel = purrr::map_dbl(out, ~pull(., .estimate)),
-             rsq_trad_pmodel = purrr::map_dbl(out_trad, ~pull(., .estimate))) |>
-      select(sitename, rsq_pmodel, rsq_trad_pmodel),
+             rsq_trad_pmodel = purrr::map_dbl(out_trad, ~pull(., .estimate)),
+             rmse_pmodel = purrr::map_dbl(out_rmse, ~pull(., .estimate))) |>
+      select(sitename, rsq_pmodel, rsq_trad_pmodel, rmse_pmodel),
     by = 'sitename'
   ) |>
   dplyr::left_join(
@@ -86,10 +104,12 @@ r2 <- lstm_lso |>
       nest() |> 
       mutate(out = purrr::map(data, ~rsq(., GPP_NT_VUT_REF, gpp_dnn, na_rm = TRUE)),
            out_trad = purrr::map(data, ~rsq_trad(., GPP_NT_VUT_REF, 
-                                                 gpp_dnn, na_rm = TRUE))) |> 
+                                                 gpp_dnn, na_rm = TRUE)),
+           out_rmse = purrr::map(data, ~rmse(., GPP_NT_VUT_REF, gpp_dnn, na_rm = TRUE))) |> 
     mutate(rsq_dnn = purrr::map_dbl(out, ~pull(., .estimate)),
-           rsq_trad_dnn = purrr::map_dbl(out_trad, ~pull(., .estimate))) |> 
-    dplyr::select(sitename, rsq_dnn, rsq_trad_dnn),
+           rsq_trad_dnn = purrr::map_dbl(out_trad, ~pull(., .estimate)),
+           rmse_dnn = purrr::map_dbl(out_rmse, ~pull(., .estimate))) |> 
+    dplyr::select(sitename, rsq_dnn, rsq_trad_dnn, rmse_dnn),
   by = 'sitename'
   ) |>
   dplyr::left_join(
@@ -111,7 +131,12 @@ r2 <- lstm_lso |>
       dplyr::select(sitename, ai, classid, koeppen_code),
     by = 'sitename'
   )
+```
 
+We start by visually comparing the performance of the neural networks against the P-model, and then against each other.
+```{r}
+# Compare LSTM and DNN to P-model
+par(mfrow=c(2,2))
 plot(rsq_trad_lstm ~ rsq_trad_pmodel, data = r2, main = "LSTM, Traditional R2")
 abline(a=0, b=1, lty=2)
 
@@ -126,9 +151,107 @@ plot(rsq_dnn ~ rsq_pmodel, data = r2,  ylim = c(0,1), xlim = c(0,1),
      main = "DNN, correlation R2")
 abline(a=0, b=1, lty=2)
 
-```
-# Paper figures
+# Compare LSTM to DNN
+plot1 <- ggplot(r2) +
+  geom_point(aes(x=rsq_trad_dnn, y=rsq_trad_lstm),
+             color="red") +
+  geom_abline(slope=1, intercept=0, lty=2) +
+  xlab("DNN") + ylab("LSTM") +
+  labs(title = "Traditional R2")
 
+plot2 <- ggplot(r2) +
+  geom_point(aes(x=rsq_dnn, y=rsq_lstm),
+             color="red") +
+  geom_abline(slope=1, intercept=0, lty=2) +
+  xlab("DNN") + ylab("LSTM") +
+  labs(title = "Correlation R2")
+
+plot3 <- ggplot(r2) +
+  geom_point(aes(x=rmse_dnn, y=rmse_lstm),
+             color="red") +
+  geom_abline(slope=1, intercept=0, lty=2) +
+  xlab("DNN") + ylab("LSTM") +
+  labs(title = "RMSE")
+
+cowplot::plot_grid(plot1, plot2, plot3)
+```
+
+After the visualisation, let's perform a comparing means test between the LSTM and DNN metrics,
+in order to check whether there is a significant improvement in performance.
+```{r}
+# First, test normality assumption
+shapiro.test(r2$rsq_lstm)
+shapiro.test(r2$rsq_dnn)
+shapiro.test(r2$rsq_trad_lstm)
+shapiro.test(r2$rsq_trad_dnn)
+
+# All tests are rejected with a very low p.value, so these data are not 
+# normally distributed
+
+# Perform (non-parametric) Wilcoxon rank test, because the t.test normality 
+# assumption does not hold. Since the performance should be compared for each
+# site, we use a paired test
+wilcox.test(x = r2$rsq_lstm, y = r2$rsq_dnn, paired = TRUE,
+            alternative = "greater")     # H0: x <= y   vs   H1: x > y
+# Null hypothesis accepted. No significant improvement
+
+wilcox.test(x = r2$rsq_trad_lstm, y = r2$rsq_trad_dnn, paired = TRUE,
+            alternative = "greater")     # H0: x <= y   vs   H1: x > y
+# Null hypothesis accepted. No significant improvement
+```
+
+### Paper figures
+
+Patterns of the seasonal GPP predictions, by climate zone.
+```{r}
+df_season_kgclimate <- lstm_lso |>
+  # Join LSTM and DNN predictions
+  left_join(
+    dnn_lso,
+    by = c('sitename', 'date', 'GPP_NT_VUT_REF')) |>
+  # Join P-model predictions
+  left_join(
+    pmodel,
+    by = c('sitename', 'date')
+  ) |>
+  rename(obs = GPP_NT_VUT_REF,
+         lstm = gpp_lstm,
+         dnn = gpp_dnn,
+         pmodel = mod)  |> 
+  # Join site metadata
+  left_join(
+    df_metadata,
+    by = "sitename"
+  ) |>
+  # Get day of year
+  mutate(doy = lubridate::yday(date),
+         northsouth = ifelse(lat>0, "North", "South")) |> 
+  # Remove unknown climates
+  dplyr::filter(koeppen_code != "-") |>
+  # Separate into northern and southern hemisphere for seasonal comparison
+  mutate(kg_code_northsouth = paste(koeppen_code, northsouth)) |> 
+  # Aggregate dates over day of year, taking mean over several years for each site
+  group_by(kg_code_northsouth, doy) |> 
+  summarise(obs = mean(obs, na.rm = TRUE), 
+            lstm = mean(lstm, na.rm = TRUE), 
+            dnn = mean(dnn, na.rm = TRUE),
+            pmodel = mean(pmodel, na.rm = TRUE))
+
+df_season_kgclimate |> 
+  pivot_longer(c(obs, lstm, dnn), names_to = "Source", values_to = "gpp") |> 
+  ggplot(aes(doy, gpp, color = Source)) +
+  geom_line() +
+  scale_color_manual(values = c("dnn" = "royalblue", "lstm" = "red", "obs" = "black"), labels = c("DNN", "LSTM", "obs.")) +
+  labs(y = expression( paste("GPP (g C m"^-2, " d"^-1, ")" ) ),
+       x = "Day of year") +
+  facet_wrap(~kg_code_northsouth)
+
+# Save figure as pdf for manuscript
+# ggsave("fig/meanseasonalcycle_by_climate.pdf", width = 9, height = 6)
+```
+
+
+Patterns of R2 with respect to the aridity index, vegetation types and climate class.
 ````{r}
 # LSTM - AI
 gg1 <- r2 |> 
@@ -213,15 +336,18 @@ cowplot::plot_grid(gg1, leftpanel,
                    ncol = 2
                    )
 ```
-# Comparison of LSTM and DNN with rolling R2 values
+
+## Comparison of LSTM and DNN with rolling R2 values
 
 ```{r}
 # Get the length of time series, since the longest records of data
 # will show learning the best (supposedly)
-lstm_lso |>
+ts_sites <- lstm_lso |>
   group_by(sitename) |>
   summarise(n_days = n()) |>
   arrange(desc(n_days))
+
+ts_sites
 ```
 
 ```{r}
@@ -229,7 +355,7 @@ lstm_lso |>
 site <- 'US-Ha1'    # change site name to observe difference
 window <- 365
 
-# Compute colling R2 for the LSTM and DNN results
+# Compute rolling R2 for the LSTM and DNN results
 r2_rolling <- data.frame(
   lstm = lstm_lso |>
     filter(sitename == site) |>
@@ -256,8 +382,8 @@ ggplot(data = r2_rolling |>
 
 ```
 
-Implement the rolling R2 calculation, for all sites.
-```{r, eval = FALSE}
+Implement the rolling R2 calculation, for all sites and the main LSTM and DNN models.
+```{r, eval = FALSE, warning=FALSE}
 # Get LSTM and DNN rolling R2 scores
 sites <- df_metadata$sitename
 n_sites <- length(sites)
@@ -308,20 +434,21 @@ for(site in sites[-1]){
 
 # Write results
 saveRDS(rolling_r2_sites, file = here::here("notebooks/rolling_r2_sites.rda"))
+# saveRDS(rolling_r2_sites, file = here::here("notebooks/rolling_r2_sites_wscal.rda"))
 ```
 
 ```{r, echo = FALSE}
-readRDS(file = here::here("notebooks/rolling_r2_sites.rda"))
+rolling_r2_sites <- readRDS(file = here::here("notebooks/rolling_r2_sites.rda"))
 ```
 
 Aggregate the evolution of the R2 over all sites, for the same day (counting from the start of measurements).
-```{r}
+```{r, eval = FALSE}
 grouped <- rolling_r2_sites |>
           select(sitename, lstm, dnn) |>
           group_by(sitename)
 
 # Aggregate the R2 scores, for the same "day since start of measurements"
-rolling_r2_aggregated <- lapply(1:2193,     # length of the longest time series
+rolling_r2_aggregated <- lapply(1:(ts_sites$n_days[1] - window),     # length of the longest time series
        function(i){ summarise(grouped, lstm = nth(lstm, i),
                               dnn = nth(dnn, i)) |>
            select(lstm, dnn) |> 
@@ -329,19 +456,45 @@ rolling_r2_aggregated <- lapply(1:2193,     # length of the longest time series
   bind_rows() 
 
 # Save aggregated values
-saveRDS(rolling_r2_aggregated, file = here::here("notebooks/rolling_r2_aggregated.rda"))
+# saveRDS(rolling_r2_aggregated, file = here::here("notebooks/rolling_r2_aggregated.rda"))
+saveRDS(rolling_r2_aggregated, file = here::here("notebooks/rolling_r2_aggregated_wscal.rda"))
+```
+
+```{r, echo = FALSE}
+# Change filename if you want to observe other results
+rolling_r2_aggregated <- readRDS(file = here::here("notebooks/rolling_r2_aggregated.rda"))
+```
+
+```{r}
+# Set window used to compute rolling R2
+window <- 365
 
 rolling_r2_aggregated |>
-  mutate(id = window + (1:2193)) |>
+  mutate(id = row_number() + 365) |>
   pivot_longer(cols = c(lstm, dnn)) |>
   ggplot() +
-  geom_line(aes(y=value, color=name, x=id)) |>
-  labs(title = "Rolling R2 score, averaged over all sites",
-       xlab = "Day since first measurement",
-       ylab = "R2")
+  geom_line(aes(y=value, color=name, x=id)) +
+  labs(title = "Rolling R2 score, averaged over all sites (without wscal)") +
+  xlab("Day since first measurement") +
+  ylab("R2")
 
 ```
 
+Plot how many sites are used to computed the aggregated R2 above:
+```{r}
+data.frame(x = 365:ts_sites$n_days[1], y = sapply(365:ts_sites$n_days[1], function(x){
+    ts_sites |>
+        mutate(n = n_days > x) |>
+        select(n) |>
+        sum()
+})) |>
+  ggplot() +
+  geom_line(aes(x=x, y=y)) +
+  xlab("Length of time series") +
+  ylab("Number of sites available") +
+  labs(title = "Number of sites used to aggregate the rolling R2")
+
+```
 
 Plotting a few sites.
 ```{r}
@@ -357,4 +510,238 @@ rolling_r2_sites |>
   facet_wrap( ~ sitename)
 
 ```
+
+### Rolling R2 aggregated over vegetation types
+
+```{r, message = FALSE}
+window = 365
+
+# Include site metadata
+grouped <- rolling_r2_sites |>
+  left_join(df_metadata,
+            by = 'sitename') |>
+  group_by(sitename, classid)
+
+# Aggregate the R2 scores, for the same "day since start of measurements"
+# and by vegetation type
+rolling_r2_aggregated_classid <- lapply(1:(ts_sites$n_days[1] - window),     # length of the longest time series
+       function(i){ summarise(grouped, 
+                              lstm = nth(lstm, i),
+                              dnn = nth(dnn, i)) |>
+           group_by(classid) |>
+           summarise(lstm = mean(lstm, na.rm = TRUE), 
+                     dnn = mean(dnn, na.rm = TRUE)) |>
+           ungroup() |>
+           mutate(id = i)
+         }) |>
+  bind_rows() 
+```
+
+```{r}
+# See number of sites per vegetation type
+df_metadata |> 
+  group_by(classid) |>
+  summarise(n = n()) |>
+  arrange(desc(n))
+
+# Plot the aggregated results
+rolling_r2_aggregated_classid |>
+  pivot_longer(cols = c(lstm, dnn)) |>
+  ggplot() +
+  geom_line(aes(y=value, color=name, x=id)) +
+  facet_wrap(~ classid) +
+  labs(title = "Rolling R2 score, averaged over vegetation types (without wscal)") +
+  xlab("Day since first measurement") +
+  ylab("R2")
+```
+
+### Rolling R2 aggregate over climate zones
+
+```{r message = FALSE}
+# Repeat the exercise for Climate
+
+grouped <- rolling_r2_sites |>
+  left_join(df_metadata,
+            by = 'sitename') |>
+  group_by(sitename, koeppen_code)
+
+# Aggregate the R2 scores, for the same "day since start of measurements"
+# and by vegetation type
+rolling_r2_aggregated_climate <- lapply(1:(ts_sites$n_days[1] - window),     # length of the longest time series
+       function(i){ summarise(grouped, 
+                              lstm = nth(lstm, i),
+                              dnn = nth(dnn, i)) |>
+           group_by(koeppen_code) |>
+           summarise(lstm = mean(lstm, na.rm = TRUE), 
+                     dnn = mean(dnn, na.rm = TRUE)) |>
+           ungroup() |>
+           mutate(id = i)
+         }) |>
+  bind_rows() 
+
+# See number of sites per vegetation type
+df_metadata |> 
+  group_by(koeppen_code) |>
+  summarise(n = n()) |>
+  arrange(desc(n))
+
+# Plot the aggregated results
+rolling_r2_aggregated_climate |>
+  pivot_longer(cols = c(lstm, dnn)) |>
+  ggplot() +
+  geom_line(aes(y=value, color=name, x=id)) +
+  facet_wrap(~ koeppen_code) +
+  labs(title = "Rolling R2 score, averaged over climate") +
+  xlab("Day since first measurement") +
+  ylab("R2")
+```
+
+## Rolling RMSE to evaluate model performance
+
+```{r, eval = FALSE}
+# Get LSTM and DNN rolling RMSE scores
+sites <- df_metadata$sitename
+n_sites <- length(sites)
+
+# Set window to compute rolling R2
+window <- 365
+
+# Initialize object with results for first site
+rolling_rmse_sites <- data.frame(
+  sitename = sites[1],
+  lstm = lstm_lso |>
+    filter(sitename == sites[1]) |>
+    rolling_rmse(truth = 'GPP_NT_VUT_REF', estimate = "gpp_lstm"),
+  dnn = dnn_lso |>
+    filter(sitename == sites[1]) |>
+    rolling_rmse(truth = 'GPP_NT_VUT_REF', estimate = 'gpp_dnn'))
+
+rolling_rmse_sites <- cbind(rolling_rmse_sites,
+                          lstm_lso |>
+                            filter(sitename == sites[1]) |>
+                            select(date) |>
+                            slice_tail(n = nrow(rolling_rmse_sites)))
+
+# Continue computing results for other sites
+for(site in sites[-1]){
+  print(paste("Computing rolling mean for:", site))
+  
+    rmse_rolling <- data.frame(
+      sitename = site,
+      lstm = lstm_lso |>
+        filter(sitename == site) |>
+        rolling_rmse(truth = 'GPP_NT_VUT_REF', estimate = "gpp_lstm"),
+      dnn = dnn_lso |>
+        filter(sitename == site) |>
+        rolling_rmse(truth = 'GPP_NT_VUT_REF', estimate = 'gpp_dnn')
+    )
+    
+    rmse_rolling <- cbind(rmse_rolling, 
+                        lstm_lso |>
+                          filter(sitename == site) |>
+                          select(date) |>
+                          slice_tail(n = nrow(rmse_rolling)))
+    
+  # Append to results from other sites
+  rolling_rmse_sites <- rbind(rolling_rmse_sites,
+                            rmse_rolling)
+}
+
+# Write results
+# saveRDS(rolling_rmse_sites, file = here::here("notebooks/rolling_rmse_sites.rda"))
+saveRDS(rolling_rmse_sites, file = here::here("notebooks/rolling_rmse_sites_wscal.rda"))
+```
+
+Aggregate the evolution of the R2 over all sites, for the same day (counting from the start of measurements).
+```{r, eval = FALSE}
+grouped <- rolling_rmse_sites |>
+          select(sitename, lstm, dnn) |>
+          group_by(sitename)
+
+# Aggregate the RMSE scores, for the same "day since start of measurements"
+rolling_rmse_aggregated <- lapply(1:(ts_sites$n_days[1] - window),     # length of the longest time series
+       function(i){ summarise(grouped, lstm = nth(lstm, i),
+                              dnn = nth(dnn, i)) |>
+           select(lstm, dnn) |> 
+           apply(MARGIN = 2, FUN = mean, na.rm = TRUE)}) |>
+  bind_rows() 
+
+# Save aggregated values
+saveRDS(rolling_rmse_aggregated, file = here::here("notebooks/rolling_rmse_aggregated.rda"))
+```
+
+Create general plots, with aggregations over all sites.
+```{r}
+# Set window used to compute rolling R2
+window <- 365
+
+rolling_rmse_aggregated |>
+  mutate(id = row_number() + window) |>
+  pivot_longer(cols = c(lstm, dnn)) |>
+  ggplot() +
+  geom_line(aes(y=value, color=name, x=id)) +
+  labs(title = "Rolling RMSE score, averaged over all sites (without wscal)") +
+  xlab("Day since first measurement") +
+  ylab("RMSE")
+
+
+data.frame(x = window:ts_sites$n_days[1], y = sapply(window:ts_sites$n_days[1], function(x){
+    ts_sites |>
+        mutate(n = n_days > x) |>
+        select(n) |>
+        sum()
+})) |>
+  ggplot() +
+  geom_line(aes(x=x, y=y)) +
+  xlab("Length of time series") +
+  ylab("Number of sites available") +
+  labs(title = "Number of sites used to aggregate the rolling RMSE")
+
+```
+
+### Rolling RMSE aggregated over vegetation types
+
+```{r, message = FALSE}
+# Load results
+rolling_rmse_sites <- readRDS(here::here("notebooks/rolling_rmse_sites.rda"))
+
+window = 365
+
+# Include site metadata
+grouped <- rolling_rmse_sites |>
+  left_join(df_metadata,
+            by = 'sitename') |>
+  group_by(sitename, classid)
+
+# Aggregate the RMSE scores, for the same "day since start of measurements"
+# and by vegetation type
+rolling_rmse_aggregated_classid <- lapply(1:(ts_sites$n_days[1] - window),     # length of the longest time series
+       function(i){ summarise(grouped, 
+                              lstm = nth(lstm, i),
+                              dnn = nth(dnn, i)) |>
+           group_by(classid) |>
+           summarise(lstm = mean(lstm, na.rm = TRUE), 
+                     dnn = mean(dnn, na.rm = TRUE)) |>
+           ungroup() |>
+           mutate(id = i)
+         }) |>
+  bind_rows() 
+
+# See number of sites per vegetation type
+df_metadata |> 
+  group_by(classid) |>
+  summarise(n = n()) |>
+  arrange(desc(n))
+
+# Plot the aggregated results
+rolling_rmse_aggregated_classid |>
+  pivot_longer(cols = c(lstm, dnn)) |>
+  ggplot() +
+  geom_line(aes(y=value, color=name, x=id)) +
+  facet_wrap(~ classid) +
+  labs(title = "Rolling RMSE score, averaged over vegetation types (without wscal") +
+  xlab("Day since first measurement") +
+  ylab("RMSE")
+```
+
 
